@@ -1,73 +1,182 @@
-# Welcome to your Lovable project
+# BIMCoin TON DeFi Protocol
 
-## Project info
+A modern React-based decentralized application built on The Open Network (TON) blockchain for earning BIM and OBA tokens through deposits, mining, tasks, and referrals.
 
-**URL**: https://lovable.dev/projects/db23b08d-08a2-4e7e-b648-6f394e9e12c2
+## Features
 
-## How can I edit this code?
+### 🌟 Core Functionality
+- **TON Wallet Integration**: Connect via TonConnect UI with support for Tonkeeper and MyTonWallet
+- **Token Deposits**: Deposit TON to mint BIMCoin tokens (1 TON = 1,000 BIM)
+- **OBA Mining**: Earn 50% OBA tokens daily through passive mining
+- **Task System**: Complete social and trading tasks for 3% OBA daily rewards
+- **Referral Program**: Earn 2% OBA on friend deposits with 365-day activity window
+- **Portfolio Tracking**: Real-time balance display and portfolio analytics
 
-There are several ways of editing your application.
+### 🎨 Design System
+- **Modern DeFi Interface**: Dark theme with TON blue and gold accents
+- **Responsive Design**: Mobile-first approach with beautiful gradients
+- **Smooth Animations**: Enhanced user experience with floating elements and glow effects
+- **Component Library**: Built with shadcn/ui and Tailwind CSS
 
-**Use Lovable**
+### 🔧 Technical Stack
+- **Frontend**: React 18 + TypeScript + Vite
+- **Styling**: Tailwind CSS with custom design tokens
+- **TON Integration**: @tonconnect/ui-react, @ton/ton, @ton/crypto
+- **State Management**: TanStack Query for async state
+- **UI Components**: Radix UI primitives with shadcn/ui
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/db23b08d-08a2-4e7e-b648-6f394e9e12c2) and start prompting.
+## Getting Started
 
-Changes made via Lovable will be committed automatically to this repo.
+### Prerequisites
+- Node.js 18+ and npm
+- TON wallet (Tonkeeper or MyTonWallet recommended)
 
-**Use your preferred IDE**
+### Installation
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+```bash
+# Clone the repository
+git clone <repository-url>
+cd bimcoin-ton-dapp
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+# Install dependencies
+npm install
 
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+# Start development server
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+### Project Structure
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+```
+src/
+├── components/
+│   ├── ui/                 # shadcn/ui components
+│   ├── WalletConnectButton.tsx    # TON wallet connection
+│   ├── DepositCard.tsx     # TON deposit interface
+│   ├── MiningCard.tsx      # OBA mining dashboard
+│   ├── TaskCard.tsx        # Task completion system
+│   ├── ReferralCard.tsx    # Referral program interface
+│   ├── BalanceCard.tsx     # Portfolio balance display
+│   ├── HeroSection.tsx     # Landing page hero
+│   └── TonConnectProvider.tsx     # TON connection provider
+├── pages/
+│   └── Index.tsx           # Main application page
+├── hooks/                  # Custom React hooks
+├── lib/                    # Utility functions
+└── index.css              # Design system and global styles
+```
 
-**Use GitHub Codespaces**
+## Token Economics
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+### BIMCoin (BIM)
+- **Minting**: 1 TON = 1,000 BIM tokens
+- **Burning**: Convert BIM back to TON (configurable rate)
+- **Usage**: Primary token for ecosystem participation
 
-## What technologies are used for this project?
+### OBA Rewards
+- **Mining**: 50% OBA per day (continuous stream)
+- **Tasks**: 3% OBA daily for completed activities
+- **Referrals**: 2% OBA on valid friend deposits
+- **Activity Window**: 365-day participation tracking
 
-This project is built with:
+## Smart Contract Integration
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+### Jetton Master
+- **Contract**: `EQBiJdfXqgRRO0asz71X0MBhS8__FY_Kc9bq6d7o-dVDshja`
+- **Standard**: TON Jetton (TEP-74)
+- **Functions**: Mint/burn BIMCoin tokens
 
-## How can I deploy this project?
+### Treasury Operations
+- **Deposits**: Tracked via comment `BIM:DEPOSIT:<uuid>`
+- **Withdrawals**: Automatic TON payouts on burn events
+- **Security**: Admin wallet controls minting operations
 
-Simply open [Lovable](https://lovable.dev/projects/db23b08d-08a2-4e7e-b648-6f394e9e12c2) and click on Share -> Publish.
+## Wallet Connection
 
-## Can I connect a custom domain to my Lovable project?
+The app supports multiple TON wallets through TonConnect:
 
-Yes, you can!
+- **Tonkeeper**: Mobile and browser extension
+- **MyTonWallet**: Cross-platform wallet solution
+- **Custom Integration**: Easy to add more wallets
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+## Development
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+### Design System
+All styles are defined in `src/index.css` using CSS custom properties:
+
+```css
+:root {
+  --primary: 215 100% 60%;        /* TON Blue */
+  --secondary: 45 100% 60%;       /* BIM Gold */
+  --gradient-primary: linear-gradient(135deg, ...);
+  --shadow-primary: 0 10px 40px -10px ...;
+}
+```
+
+### Component Guidelines
+- Use semantic design tokens (never hardcode colors)
+- Implement proper error handling and loading states
+- Follow TON transaction patterns with proper validation
+- Maintain responsive design across all screen sizes
+
+### State Management
+- TonConnect for wallet state
+- React Query for async operations
+- Local state for UI interactions
+- Toast notifications for user feedback
+
+## Backend Integration (Future)
+
+This frontend is designed to work with a Node.js backend featuring:
+
+- **Express.js API**: RESTful endpoints for deposits, mining, tasks
+- **MongoDB**: User data, transactions, and analytics storage
+- **TON Watchers**: Blockchain event monitoring
+- **Security**: Rate limiting, API authentication, pause functionality
+
+## Deployment
+
+### Frontend Deployment
+```bash
+# Build for production
+npm run build
+
+# Preview build locally
+npm run preview
+```
+
+### Environment Configuration
+Create appropriate environment files for:
+- TON network endpoints (mainnet/testnet)
+- API endpoints and authentication
+- Monitoring and analytics services
+
+## Security Considerations
+
+- **Client-Side**: No private keys stored in frontend
+- **Transactions**: User signs all transactions via wallet
+- **API Communication**: Secure HTTPS endpoints
+- **Input Validation**: Comprehensive validation on all user inputs
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Follow the existing code style and design patterns
+4. Add proper TypeScript types and error handling
+5. Test across different wallets and screen sizes
+6. Submit a pull request with clear description
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Links
+
+- **TON Blockchain**: https://ton.org
+- **TonConnect**: https://docs.ton.org/develop/dapps/ton-connect/overview
+- **Jetton Standard**: https://github.com/ton-blockchain/TEPs/blob/master/text/0074-jettons-standard.md
+
+---
+
+Built with ❤️ for the TON ecosystem
