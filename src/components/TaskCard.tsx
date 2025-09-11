@@ -1,63 +1,61 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { CheckCircle, Trophy, ExternalLink } from 'lucide-react';
+import { CheckCircle, Trophy, ExternalLink, RefreshCw } from 'lucide-react';
 import { useTonAddress } from '@tonconnect/ui-react';
 import { useToast } from '@/hooks/use-toast';
+import { bimCoinAPI } from '@/lib/api';
 
 interface Task {
   id: string;
   title: string;
   description: string;
-  reward: number;
-  type: 'social' | 'trading' | 'referral';
-  completed: boolean;
-  url?: string;
+  reward_amount: number;
+  task_type: string;
+  external_url?: string;
+  status?: string;
+  completed?: boolean;
 }
 
 const TaskCard = () => {
-  const [tasks, setTasks] = useState<Task[]>([
-    {
-      id: '1',
-      title: 'Follow on Twitter',
-      description: 'Follow @BIMCoin_Official on Twitter',
-      reward: 10,
-      type: 'social',
-      completed: false,
-      url: 'https://twitter.com/bimcoin_official'
-    },
-    {
-      id: '2',
-      title: 'Join Telegram',
-      description: 'Join our official Telegram channel',
-      reward: 15,
-      type: 'social',
-      completed: false,
-      url: 'https://t.me/bimcoin_official'
-    },
-    {
-      id: '3',
-      title: 'Make First Trade',
-      description: 'Complete your first deposit transaction',
-      reward: 50,
-      type: 'trading',
-      completed: false,
-    },
-    {
-      id: '4',
-      title: 'Refer a Friend',
-      description: 'Invite someone using your referral link',
-      reward: 100,
-      type: 'referral',
-      completed: false,
-    }
-  ]);
-
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [completingTasks, setCompletingTasks] = useState<Set<string>>(new Set());
   const address = useTonAddress();
   const { toast } = useToast();
 
-  const completeTask = (taskId: string) => {
+  // Fetch available tasks from API
+  const fetchTasks = async () => {
+    if (!address) return;
+    
+    setLoading(true);
+    try {
+      const result = await bimCoinAPI.getAvailableTasks(address);
+      if (result.success && result.data) {
+        setTasks(result.data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch tasks:', error);
+      toast({
+        title: "Failed to load tasks",
+        description: "There was an error loading available tasks",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (address) {
+      fetchTasks();
+    } else {
+      setTasks([]);
+    }
+  }, [address]);
+
+  const completeTask = async (taskId: string) => {
     if (!address) {
       toast({
         title: "Wallet not connected",
@@ -67,25 +65,37 @@ const TaskCard = () => {
       return;
     }
 
-    setTasks(prev => 
-      prev.map(task => 
-        task.id === taskId 
-          ? { ...task, completed: true }
-          : task
-      )
-    );
-
-    const task = tasks.find(t => t.id === taskId);
-    if (task) {
+    setCompletingTasks(prev => new Set(prev).add(taskId));
+    try {
+      const result = await bimCoinAPI.completeTask(address, taskId);
+      if (result.success) {
+        const task = tasks.find(t => t.id === taskId);
+        toast({
+          title: "Task completed!",
+          description: `You earned ${task?.reward_amount || 0} OBA tokens`,
+          variant: "default",
+        });
+        await fetchTasks(); // Refresh tasks
+      } else {
+        throw new Error(result.error || 'Failed to complete task');
+      }
+    } catch (error) {
+      console.error('Failed to complete task:', error);
       toast({
-        title: "Task completed!",
-        description: `You earned ${task.reward} OBA tokens`,
-        variant: "default",
+        title: "Failed to complete task",
+        description: error instanceof Error ? error.message : "There was an error completing the task",
+        variant: "destructive",
+      });
+    } finally {
+      setCompletingTasks(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(taskId);
+        return newSet;
       });
     }
   };
 
-  const getTypeColor = (type: Task['type']) => {
+  const getTypeColor = (type: string) => {
     switch (type) {
       case 'social': return 'bg-blue-500/20 text-blue-400';
       case 'trading': return 'bg-green-500/20 text-green-400';
@@ -94,7 +104,7 @@ const TaskCard = () => {
     }
   };
 
-  const totalRewards = tasks.filter(t => t.completed).reduce((sum, t) => sum + t.reward, 0);
+  const totalRewards = tasks.filter(t => t.status === 'completed').reduce((sum, t) => sum + t.reward_amount, 0);
 
   return (
     <Card className="enhanced-card">
@@ -108,55 +118,71 @@ const TaskCard = () => {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="text-center p-3 rounded-lg bg-muted/50">
-          <div className="text-2xl font-bold text-warning">{totalRewards}</div>
-          <div className="text-sm text-muted-foreground">Total OBA Earned</div>
+        <div className="flex justify-between items-center">
+          <div className="text-center p-3 rounded-lg bg-muted/50">
+            <div className="text-2xl font-bold text-warning">{totalRewards}</div>
+            <div className="text-sm text-muted-foreground">Total OBA Earned</div>
+          </div>
+          <Button
+            onClick={fetchTasks}
+            disabled={loading || !address}
+            variant="outline"
+            size="sm"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          </Button>
         </div>
 
         <div className="space-y-3">
-          {tasks.map((task) => (
+          {loading && tasks.length === 0 ? (
+            <div className="text-center py-4 text-muted-foreground">Loading tasks...</div>
+          ) : tasks.length === 0 ? (
+            <div className="text-center py-4 text-muted-foreground">No tasks available</div>
+          ) : (
+            tasks.map((task) => (
             <div 
               key={task.id}
               className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border border-border/50"
             >
-              <div className="flex-1 space-y-1">
-                <div className="flex items-center gap-2">
-                  <span className="font-medium">{task.title}</span>
-                  <Badge className={getTypeColor(task.type)}>
-                    {task.type}
-                  </Badge>
+                <div className="flex-1 space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">{task.title}</span>
+                    <Badge className={getTypeColor(task.task_type)}>
+                      {task.task_type}
+                    </Badge>
+                  </div>
+                  <p className="text-sm text-muted-foreground">{task.description}</p>
+                  <div className="text-sm font-medium text-warning">+{task.reward_amount} OBA</div>
                 </div>
-                <p className="text-sm text-muted-foreground">{task.description}</p>
-                <div className="text-sm font-medium text-warning">+{task.reward} OBA</div>
-              </div>
 
-              <div className="flex items-center gap-2">
-                {task.url && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => window.open(task.url, '_blank')}
-                    className="p-2"
-                  >
-                    <ExternalLink className="w-4 h-4" />
-                  </Button>
-                )}
-                
-                {task.completed ? (
-                  <CheckCircle className="w-6 h-6 text-success" />
-                ) : (
-                  <Button
-                    size="sm"
-                    onClick={() => completeTask(task.id)}
-                    disabled={!address}
-                    className="bg-gradient-primary hover:opacity-90"
-                  >
-                    Complete
-                  </Button>
-                )}
+                <div className="flex items-center gap-2">
+                  {task.external_url && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => window.open(task.external_url, '_blank')}
+                      className="p-2"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                    </Button>
+                  )}
+                  
+                  {task.status === 'completed' ? (
+                    <CheckCircle className="w-6 h-6 text-success" />
+                  ) : (
+                    <Button
+                      size="sm"
+                      onClick={() => completeTask(task.id)}
+                      disabled={!address || completingTasks.has(task.id)}
+                      className="bg-gradient-primary hover:opacity-90"
+                    >
+                      {completingTasks.has(task.id) ? "Completing..." : "Complete"}
+                    </Button>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
       </CardContent>
     </Card>

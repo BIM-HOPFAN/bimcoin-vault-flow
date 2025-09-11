@@ -8,9 +8,19 @@ import ReferralCard from '@/components/ReferralCard';
 import WalletConnectButton from '@/components/WalletConnectButton';
 import { Card, CardContent } from '@/components/ui/card';
 import { Wallet, TrendingUp, Users, Trophy } from 'lucide-react';
+import { useReferral } from '@/hooks/useReferral';
+import { useEffect } from 'react';
 
 const Index = () => {
   const address = useTonAddress();
+  const { referralCode } = useReferral();
+
+  // Log referral code for debugging
+  useEffect(() => {
+    if (referralCode) {
+      console.log('Referral code detected:', referralCode);
+    }
+  }, [referralCode]);
 
   return (
     <div className="min-h-screen">

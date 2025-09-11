@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -6,16 +6,52 @@ import { Label } from '@/components/ui/label';
 import { Users, Copy, Share, Gift } from 'lucide-react';
 import { useTonAddress } from '@tonconnect/ui-react';
 import { useToast } from '@/hooks/use-toast';
+import { bimCoinAPI } from '@/lib/api';
 
 const ReferralCard = () => {
   const [referralCount, setReferralCount] = useState(0);
   const [earnedFromReferrals, setEarnedFromReferrals] = useState(0);
+  const [referralCode, setReferralCode] = useState('');
+  const [userStats, setUserStats] = useState<any>(null);
   const address = useTonAddress();
   const { toast } = useToast();
 
-  const referralLink = address 
-    ? `https://bimcoin.app/ref/${address.slice(0, 8)}`
+  const referralLink = address && referralCode
+    ? `${window.location.origin}?ref=${referralCode}`
     : 'Connect wallet to get referral link';
+
+  // Fetch user stats including referral data
+  const fetchUserStats = async () => {
+    if (!address) return;
+    
+    try {
+      const stats = await bimCoinAPI.getUserStats(address);
+      if (stats.success && stats.data) {
+        setUserStats(stats.data);
+        setReferralCount(stats.data.referral_count || 0);
+        setEarnedFromReferrals(parseFloat(stats.data.total_earned_from_referrals || '0'));
+      }
+      
+      // Get user profile for referral code
+      const profile = await bimCoinAPI.getUserProfile(address);
+      if (profile.success && profile.data) {
+        setReferralCode(profile.data.referral_code || '');
+      }
+    } catch (error) {
+      console.error('Failed to fetch user stats:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (address) {
+      fetchUserStats();
+    } else {
+      setReferralCount(0);
+      setEarnedFromReferrals(0);
+      setReferralCode('');
+      setUserStats(null);
+    }
+  }, [address]);
 
   const copyReferralLink = () => {
     if (address) {

@@ -5,41 +5,94 @@ import { Progress } from '@/components/ui/progress';
 import { Pickaxe, Gem, Clock } from 'lucide-react';
 import { useTonAddress } from '@tonconnect/ui-react';
 import { useToast } from '@/hooks/use-toast';
+import { bimCoinAPI } from '@/lib/api';
 
 const MiningCard = () => {
   const [mining, setMining] = useState(false);
   const [miningProgress, setMiningProgress] = useState(0);
   const [earnedOBA, setEarnedOBA] = useState(0);
   const [timeRemaining, setTimeRemaining] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [miningSession, setMiningSession] = useState<any>(null);
   const address = useTonAddress();
   const { toast } = useToast();
 
-  // Simulate mining progress (50% OBA per day)
+  // Fetch mining status from API
+  const fetchMiningStatus = async () => {
+    if (!address) return;
+    
+    try {
+      const status = await bimCoinAPI.getMiningStatus(address);
+      if (status.success && status.data) {
+        const session = status.data;
+        setMiningSession(session);
+        
+        if (session.status === 'active') {
+          setMining(true);
+          const startTime = new Date(session.start_time).getTime();
+          const now = Date.now();
+          const elapsed = (now - startTime) / 1000;
+          const totalDuration = 24 * 60 * 60; // 24 hours
+          const progress = Math.min((elapsed / totalDuration) * 100, 100);
+          
+          setMiningProgress(progress);
+          setEarnedOBA(session.oba_earned || 0);
+          setTimeRemaining(Math.max(0, totalDuration - elapsed));
+        } else {
+          setMining(false);
+          setMiningProgress(0);
+          setEarnedOBA(0);
+          setTimeRemaining(0);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch mining status:', error);
+    }
+  };
+
+  // Update mining progress in real time
   useEffect(() => {
     let interval: NodeJS.Timeout;
     
-    if (mining) {
+    if (mining && miningSession) {
       interval = setInterval(() => {
-        setMiningProgress(prev => {
-          const newProgress = prev + (100 / (24 * 60 * 60)); // Progress per second for 24h cycle
-          if (newProgress >= 100) {
-            setMining(false);
-            return 100;
-          }
-          return newProgress;
-        });
+        const startTime = new Date(miningSession.start_time).getTime();
+        const now = Date.now();
+        const elapsed = (now - startTime) / 1000;
+        const totalDuration = 24 * 60 * 60; // 24 hours
+        const progress = Math.min((elapsed / totalDuration) * 100, 100);
         
-        setEarnedOBA(prev => prev + (50 / (24 * 60 * 60))); // 50 OBA per day
-        setTimeRemaining(prev => Math.max(0, prev - 1));
+        if (progress >= 100) {
+          setMining(false);
+          setMiningProgress(100);
+          setTimeRemaining(0);
+        } else {
+          setMiningProgress(progress);
+          setEarnedOBA((progress / 100) * 50); // 50 OBA per day
+          setTimeRemaining(totalDuration - elapsed);
+        }
       }, 1000);
     }
 
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [mining]);
+  }, [mining, miningSession]);
 
-  const startMining = () => {
+  // Fetch status when wallet connects
+  useEffect(() => {
+    if (address) {
+      fetchMiningStatus();
+    } else {
+      setMining(false);
+      setMiningProgress(0);
+      setEarnedOBA(0);
+      setTimeRemaining(0);
+      setMiningSession(null);
+    }
+  }, [address]);
+
+  const startMining = async () => {
     if (!address) {
       toast({
         title: "Wallet not connected",
@@ -49,27 +102,56 @@ const MiningCard = () => {
       return;
     }
 
-    setMining(true);
-    setMiningProgress(0);
-    setEarnedOBA(0);
-    setTimeRemaining(24 * 60 * 60); // 24 hours in seconds
-    
-    toast({
-      title: "Mining started",
-      description: "You're now mining OBA tokens!",
-      variant: "default",
-    });
+    setLoading(true);
+    try {
+      const result = await bimCoinAPI.startMining(address);
+      if (result.success) {
+        await fetchMiningStatus(); // Refresh status
+        toast({
+          title: "Mining started",
+          description: "You're now mining OBA tokens!",
+          variant: "default",
+        });
+      } else {
+        throw new Error(result.error || 'Failed to start mining');
+      }
+    } catch (error) {
+      console.error('Failed to start mining:', error);
+      toast({
+        title: "Failed to start mining",
+        description: error instanceof Error ? error.message : "There was an error starting mining",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const claimRewards = () => {
-    if (earnedOBA > 0) {
+  const claimRewards = async () => {
+    if (!address || earnedOBA === 0) return;
+
+    setLoading(true);
+    try {
+      const result = await bimCoinAPI.claimMining(address);
+      if (result.success) {
+        toast({
+          title: "Rewards claimed",
+          description: `You claimed ${earnedOBA.toFixed(4)} OBA tokens`,
+          variant: "default",
+        });
+        await fetchMiningStatus(); // Refresh status
+      } else {
+        throw new Error(result.error || 'Failed to claim rewards');
+      }
+    } catch (error) {
+      console.error('Failed to claim rewards:', error);
       toast({
-        title: "Rewards claimed",
-        description: `You claimed ${earnedOBA.toFixed(4)} OBA tokens`,
-        variant: "default",
+        title: "Failed to claim rewards",
+        description: error instanceof Error ? error.message : "There was an error claiming rewards",
+        variant: "destructive",
       });
-      setEarnedOBA(0);
-      setMiningProgress(0);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -125,19 +207,19 @@ const MiningCard = () => {
         <div className="flex gap-2">
           <Button 
             onClick={startMining}
-            disabled={mining || !address}
+            disabled={mining || !address || loading}
             className="flex-1 bg-gradient-secondary text-secondary-foreground hover:opacity-90"
           >
-            {mining ? "Mining..." : "Start Mining"}
+            {loading ? "Loading..." : mining ? "Mining..." : "Start Mining"}
           </Button>
           
           <Button 
             onClick={claimRewards}
-            disabled={earnedOBA === 0}
+            disabled={earnedOBA === 0 || loading}
             variant="outline"
             className="flex-1 border-secondary/20 hover:border-secondary/40"
           >
-            Claim Rewards
+            {loading ? "Claiming..." : "Claim Rewards"}
           </Button>
         </div>
       </CardContent>

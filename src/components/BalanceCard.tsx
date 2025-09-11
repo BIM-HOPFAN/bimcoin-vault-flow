@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Wallet, TrendingUp, ArrowUpCircle, RefreshCw } from 'lucide-react';
 import { useTonAddress } from '@tonconnect/ui-react';
 import { useToast } from '@/hooks/use-toast';
+import { bimCoinAPI } from '@/lib/api';
 
 interface Balances {
   ton: number;
@@ -14,24 +15,58 @@ interface Balances {
 const BalanceCard = () => {
   const [balances, setBalances] = useState<Balances>({ ton: 0, bim: 0, oba: 0 });
   const [loading, setLoading] = useState(false);
+  const [user, setUser] = useState<any>(null);
   const address = useTonAddress();
   const { toast } = useToast();
 
-  // Simulate balance fetching
+  // Initialize user when wallet connects
+  const initializeUser = async (walletAddress: string) => {
+    try {
+      // Try to get existing user profile
+      let userProfile = await bimCoinAPI.getUserProfile(walletAddress);
+      
+      if (!userProfile.success) {
+        // Check for referral code in localStorage
+        const referralCode = localStorage.getItem('referralCode');
+        
+        // Register new user if doesn't exist
+        console.log('Registering new user:', walletAddress, 'with referral:', referralCode);
+        const registerResult = await bimCoinAPI.registerUser(walletAddress, referralCode || undefined);
+        if (registerResult.success) {
+          userProfile = await bimCoinAPI.getUserProfile(walletAddress);
+          // Clear referral code after successful registration
+          if (referralCode) {
+            localStorage.removeItem('referralCode');
+          }
+        }
+      }
+      
+      if (userProfile.success) {
+        setUser(userProfile.data);
+        console.log('User initialized:', userProfile.data);
+      }
+    } catch (error) {
+      console.error('Failed to initialize user:', error);
+    }
+  };
+
+  // Fetch real balances from API
   const fetchBalances = async () => {
     if (!address) return;
     
     setLoading(true);
     try {
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const balanceData = await bimCoinAPI.getBalance(address);
       
-      // Mock balances - in real app, fetch from blockchain/backend
-      setBalances({
-        ton: 5.23,
-        bim: 1250.75,
-        oba: 45.32
-      });
+      if (balanceData.success || balanceData.ton_balance !== undefined) {
+        setBalances({
+          ton: parseFloat(balanceData.ton_balance || '0'),
+          bim: parseFloat(balanceData.bim_balance || '0'),
+          oba: parseFloat(balanceData.oba_balance || '0')
+        });
+      } else {
+        throw new Error(balanceData.error || 'Failed to fetch balances');
+      }
     } catch (error) {
       console.error('Failed to fetch balances:', error);
       toast({
@@ -46,9 +81,11 @@ const BalanceCard = () => {
 
   useEffect(() => {
     if (address) {
+      initializeUser(address);
       fetchBalances();
     } else {
       setBalances({ ton: 0, bim: 0, oba: 0 });
+      setUser(null);
     }
   }, [address]);
 
