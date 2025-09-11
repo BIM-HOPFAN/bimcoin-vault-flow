@@ -1,1 +1,16 @@
 project_id = "xyskyvwxbpnlveamxwlb"
+
+[functions.user-api]
+verify_jwt = false
+
+[functions.deposit-api]
+verify_jwt = false
+
+[functions.mining-api]
+verify_jwt = false
+
+[functions.task-api]
+verify_jwt = false
+
+[functions.ton-watcher]
+verify_jwt = false

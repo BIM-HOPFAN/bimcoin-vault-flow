@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { ArrowDownCircle, Coins } from 'lucide-react';
 import { useTonAddress, useTonConnectUI } from '@tonconnect/ui-react';
 import { useToast } from '@/hooks/use-toast';
+import { bimCoinAPI } from '@/lib/api';
 
 const DepositCard = () => {
   const [amount, setAmount] = useState('');
@@ -35,17 +36,24 @@ const DepositCard = () => {
 
     setLoading(true);
     try {
-      // Generate unique deposit ID
-      const depositId = crypto.randomUUID();
+      const depositAmount = parseFloat(amount);
       
-      // Create transaction to treasury wallet
+      // Register user if not exists and create deposit intent
+      await bimCoinAPI.registerUser(address);
+      const intentResult = await bimCoinAPI.createDepositIntent(address, depositAmount);
+      
+      if (intentResult.error) {
+        throw new Error(intentResult.error);
+      }
+
+      // Create transaction with the generated comment and treasury address
       const transaction = {
-        validUntil: Math.floor(Date.now() / 1000) + 300, // 5 minutes
+        validUntil: Math.floor(Date.now() / 1000) + 600, // 10 minutes
         messages: [
           {
-            address: "EQBiJdfXqgRRO0asz71X0MBhS8__FY_Kc9bq6d7o-dVDshja", // Treasury address
-            amount: (parseFloat(amount) * 1e9).toString(), // Convert to nanoTONs
-            payload: `BIM:DEPOSIT:${depositId}`, // Comment for tracking
+            address: intentResult.treasury_address,
+            amount: (depositAmount * 1e9).toString(), // Convert to nanoTONs
+            payload: intentResult.deposit_comment, // Use the generated deposit comment
           },
         ],
       };
@@ -54,7 +62,7 @@ const DepositCard = () => {
       
       toast({
         title: "Deposit initiated",
-        description: `Your deposit of ${amount} TON is being processed`,
+        description: `Depositing ${amount} TON. You will receive ${intentResult.bim_amount} BIM tokens.`,
         variant: "default",
       });
       
@@ -63,7 +71,7 @@ const DepositCard = () => {
       console.error('Deposit failed:', error);
       toast({
         title: "Deposit failed",
-        description: "There was an error processing your deposit",
+        description: error instanceof Error ? error.message : "There was an error processing your deposit",
         variant: "destructive",
       });
     } finally {

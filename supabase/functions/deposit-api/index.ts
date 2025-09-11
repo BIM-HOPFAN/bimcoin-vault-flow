@@ -1,0 +1,316 @@
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { corsHeaders } from '../_shared/cors.ts'
+
+const supabase = createClient(
+  Deno.env.get('SUPABASE_URL') ?? '',
+  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+)
+
+Deno.serve(async (req) => {
+  // Handle CORS preflight requests
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders })
+  }
+
+  try {
+    const url = new URL(req.url)
+    const path = url.pathname.split('/').pop()
+
+    switch (req.method) {
+      case 'POST':
+        if (path === 'create-intent') {
+          return await createDepositIntent(req)
+        } else if (path === 'process') {
+          return await processDeposit(req)
+        }
+        break
+
+      case 'GET':
+        if (path === 'history') {
+          return await getDepositHistory(url.searchParams)
+        } else if (path === 'status') {
+          return await getDepositStatus(url.searchParams)
+        }
+        break
+
+      default:
+        return new Response('Method not allowed', { 
+          status: 405,
+          headers: corsHeaders 
+        })
+    }
+
+    return new Response('Not found', { 
+      status: 404,
+      headers: corsHeaders 
+    })
+  } catch (error) {
+    console.error('Error in deposit-api function:', error)
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    })
+  }
+})
+
+async function createDepositIntent(req: Request) {
+  const { wallet_address, ton_amount } = await req.json()
+
+  if (!wallet_address || !ton_amount) {
+    return new Response(JSON.stringify({ error: 'Wallet address and TON amount required' }), {
+      status: 400,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    })
+  }
+
+  // Get or create user
+  let { data: user, error: userError } = await supabase
+    .from('users')
+    .select('*')
+    .eq('wallet_address', wallet_address)
+    .single()
+
+  if (userError && userError.code === 'PGRST116') {
+    // User doesn't exist, create one
+    const { data: newUser, error: createError } = await supabase
+      .from('users')
+      .insert({ wallet_address })
+      .select()
+      .single()
+
+    if (createError) throw createError
+    user = newUser
+  } else if (userError) {
+    throw userError
+  }
+
+  // Get BIM per TON rate from config
+  const { data: config, error: configError } = await supabase
+    .from('config')
+    .select('value')
+    .eq('key', 'bim_per_ton')
+    .single()
+
+  if (configError) throw configError
+
+  const bimPerTon = parseFloat(config.value)
+  const bimAmount = parseFloat(ton_amount) * bimPerTon
+
+  // Generate deposit comment
+  const depositId = crypto.randomUUID()
+  const depositComment = `BIM:DEPOSIT:${depositId}`
+
+  // Create deposit record
+  const { data: deposit, error: depositError } = await supabase
+    .from('deposits')
+    .insert({
+      user_id: user.id,
+      ton_amount: ton_amount.toString(),
+      bim_amount: bimAmount.toString(),
+      deposit_comment: depositComment,
+      status: 'pending'
+    })
+    .select()
+    .single()
+
+  if (depositError) throw depositError
+
+  // Get treasury address from config
+  const treasuryAddress = Deno.env.get('TREASURY_ADDRESS')
+
+  return new Response(JSON.stringify({
+    deposit_id: deposit.id,
+    treasury_address: treasuryAddress,
+    ton_amount: ton_amount,
+    bim_amount: bimAmount,
+    deposit_comment: depositComment,
+    expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString() // 10 minutes
+  }), {
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+  })
+}
+
+async function processDeposit(req: Request) {
+  const { deposit_hash, deposit_comment } = await req.json()
+
+  if (!deposit_hash || !deposit_comment) {
+    return new Response(JSON.stringify({ error: 'Deposit hash and comment required' }), {
+      status: 400,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    })
+  }
+
+  // Find deposit by comment
+  const { data: deposit, error: depositError } = await supabase
+    .from('deposits')
+    .select('*, users(*)')
+    .eq('deposit_comment', deposit_comment)
+    .eq('status', 'pending')
+    .single()
+
+  if (depositError) {
+    return new Response(JSON.stringify({ error: 'Deposit not found or already processed' }), {
+      status: 404,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    })
+  }
+
+  try {
+    // Update deposit with hash and mark as confirmed
+    const { error: updateError } = await supabase
+      .from('deposits')
+      .update({
+        deposit_hash,
+        status: 'confirmed',
+        processed_at: new Date().toISOString()
+      })
+      .eq('id', deposit.id)
+
+    if (updateError) throw updateError
+
+    // Update user balances and stats
+    const { error: userUpdateError } = await supabase
+      .from('users')
+      .update({
+        bim_balance: (parseFloat(deposit.users.bim_balance) + parseFloat(deposit.bim_amount)).toString(),
+        total_deposited: (parseFloat(deposit.users.total_deposited) + parseFloat(deposit.ton_amount)).toString(),
+        last_activity_at: new Date().toISOString()
+      })
+      .eq('id', deposit.user_id)
+
+    if (userUpdateError) throw userUpdateError
+
+    // Check for referral reward
+    if (deposit.users.referred_by) {
+      const { data: referralConfig } = await supabase
+        .from('config')
+        .select('value')
+        .eq('key', 'referral_rate')
+        .single()
+
+      if (referralConfig) {
+        const referralRate = parseFloat(referralConfig.value)
+        const referralReward = parseFloat(deposit.bim_amount) * referralRate
+
+        // Check if this is the first deposit for referral
+        const { count: depositCount } = await supabase
+          .from('deposits')
+          .select('*', { count: 'exact' })
+          .eq('user_id', deposit.user_id)
+          .eq('status', 'confirmed')
+
+        if (depositCount === 1) {
+          // Create referral record
+          await supabase
+            .from('referrals')
+            .insert({
+              referrer_id: deposit.users.referred_by,
+              referee_id: deposit.user_id,
+              first_deposit_id: deposit.id,
+              reward_amount: referralReward.toString(),
+              status: 'completed',
+              completed_at: new Date().toISOString()
+            })
+
+          // Update referrer's OBA balance
+          const { data: referrer } = await supabase
+            .from('users')
+            .select('oba_balance, total_earned_from_referrals')
+            .eq('id', deposit.users.referred_by)
+            .single()
+
+          if (referrer) {
+            await supabase
+              .from('users')
+              .update({
+                oba_balance: (parseFloat(referrer.oba_balance) + referralReward).toString(),
+                total_earned_from_referrals: (parseFloat(referrer.total_earned_from_referrals) + referralReward).toString()
+              })
+              .eq('id', deposit.users.referred_by)
+          }
+        }
+      }
+    }
+
+    return new Response(JSON.stringify({
+      success: true,
+      bim_minted: deposit.bim_amount
+    }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    })
+
+  } catch (error) {
+    // Mark deposit as failed
+    await supabase
+      .from('deposits')
+      .update({ status: 'failed' })
+      .eq('id', deposit.id)
+
+    throw error
+  }
+}
+
+async function getDepositHistory(params: URLSearchParams) {
+  const walletAddress = params.get('wallet_address')
+  const limit = parseInt(params.get('limit') || '10')
+  
+  if (!walletAddress) {
+    return new Response(JSON.stringify({ error: 'Wallet address required' }), {
+      status: 400,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    })
+  }
+
+  const { data: user } = await supabase
+    .from('users')
+    .select('id')
+    .eq('wallet_address', walletAddress)
+    .single()
+
+  if (!user) {
+    return new Response(JSON.stringify({ deposits: [] }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    })
+  }
+
+  const { data: deposits, error } = await supabase
+    .from('deposits')
+    .select('*')
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: false })
+    .limit(limit)
+
+  if (error) throw error
+
+  return new Response(JSON.stringify({ deposits }), {
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+  })
+}
+
+async function getDepositStatus(params: URLSearchParams) {
+  const depositId = params.get('deposit_id')
+  
+  if (!depositId) {
+    return new Response(JSON.stringify({ error: 'Deposit ID required' }), {
+      status: 400,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    })
+  }
+
+  const { data: deposit, error } = await supabase
+    .from('deposits')
+    .select('*')
+    .eq('id', depositId)
+    .single()
+
+  if (error) {
+    return new Response(JSON.stringify({ error: 'Deposit not found' }), {
+      status: 404,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    })
+  }
+
+  return new Response(JSON.stringify({ deposit }), {
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+  })
+}
