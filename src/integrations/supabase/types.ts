@@ -14,7 +14,369 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      burns: {
+        Row: {
+          bim_amount: number
+          created_at: string | null
+          id: string
+          jetton_burn_hash: string
+          payout_processed: boolean | null
+          processed_at: string | null
+          ton_amount: number
+          ton_payout_hash: string | null
+          user_id: string
+        }
+        Insert: {
+          bim_amount: number
+          created_at?: string | null
+          id?: string
+          jetton_burn_hash: string
+          payout_processed?: boolean | null
+          processed_at?: string | null
+          ton_amount: number
+          ton_payout_hash?: string | null
+          user_id: string
+        }
+        Update: {
+          bim_amount?: number
+          created_at?: string | null
+          id?: string
+          jetton_burn_hash?: string
+          payout_processed?: boolean | null
+          processed_at?: string | null
+          ton_amount?: number
+          ton_payout_hash?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "burns_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      config: {
+        Row: {
+          description: string | null
+          key: string
+          updated_at: string | null
+          value: string
+        }
+        Insert: {
+          description?: string | null
+          key: string
+          updated_at?: string | null
+          value: string
+        }
+        Update: {
+          description?: string | null
+          key?: string
+          updated_at?: string | null
+          value?: string
+        }
+        Relationships: []
+      }
+      deposits: {
+        Row: {
+          bim_amount: number
+          created_at: string | null
+          deposit_comment: string
+          deposit_hash: string | null
+          id: string
+          jetton_mint_hash: string | null
+          oba_reward: number | null
+          processed_at: string | null
+          status: Database["public"]["Enums"]["deposit_status"] | null
+          ton_amount: number
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          bim_amount: number
+          created_at?: string | null
+          deposit_comment: string
+          deposit_hash?: string | null
+          id?: string
+          jetton_mint_hash?: string | null
+          oba_reward?: number | null
+          processed_at?: string | null
+          status?: Database["public"]["Enums"]["deposit_status"] | null
+          ton_amount: number
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          bim_amount?: number
+          created_at?: string | null
+          deposit_comment?: string
+          deposit_hash?: string | null
+          id?: string
+          jetton_mint_hash?: string | null
+          oba_reward?: number | null
+          processed_at?: string | null
+          status?: Database["public"]["Enums"]["deposit_status"] | null
+          ton_amount?: number
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deposits_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mining_sessions: {
+        Row: {
+          claimed_at: string | null
+          created_at: string | null
+          duration_seconds: number | null
+          end_time: string | null
+          id: string
+          oba_earned: number | null
+          start_time: string
+          status: Database["public"]["Enums"]["mining_status"] | null
+          user_id: string
+        }
+        Insert: {
+          claimed_at?: string | null
+          created_at?: string | null
+          duration_seconds?: number | null
+          end_time?: string | null
+          id?: string
+          oba_earned?: number | null
+          start_time?: string
+          status?: Database["public"]["Enums"]["mining_status"] | null
+          user_id: string
+        }
+        Update: {
+          claimed_at?: string | null
+          created_at?: string | null
+          duration_seconds?: number | null
+          end_time?: string | null
+          id?: string
+          oba_earned?: number | null
+          start_time?: string
+          status?: Database["public"]["Enums"]["mining_status"] | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mining_sessions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      referrals: {
+        Row: {
+          completed_at: string | null
+          created_at: string | null
+          first_deposit_id: string | null
+          id: string
+          referee_id: string
+          referrer_id: string
+          reward_amount: number | null
+          status: Database["public"]["Enums"]["referral_status"] | null
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string | null
+          first_deposit_id?: string | null
+          id?: string
+          referee_id: string
+          referrer_id: string
+          reward_amount?: number | null
+          status?: Database["public"]["Enums"]["referral_status"] | null
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string | null
+          first_deposit_id?: string | null
+          id?: string
+          referee_id?: string
+          referrer_id?: string
+          reward_amount?: number | null
+          status?: Database["public"]["Enums"]["referral_status"] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "referrals_first_deposit_id_fkey"
+            columns: ["first_deposit_id"]
+            isOneToOne: false
+            referencedRelation: "deposits"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "referrals_referee_id_fkey"
+            columns: ["referee_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "referrals_referrer_id_fkey"
+            columns: ["referrer_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tasks: {
+        Row: {
+          created_at: string | null
+          daily_limit: number | null
+          description: string
+          external_url: string | null
+          id: string
+          is_active: boolean | null
+          reward_amount: number
+          task_type: string
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          daily_limit?: number | null
+          description: string
+          external_url?: string | null
+          id?: string
+          is_active?: boolean | null
+          reward_amount: number
+          task_type: string
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          daily_limit?: number | null
+          description?: string
+          external_url?: string | null
+          id?: string
+          is_active?: boolean | null
+          reward_amount?: number
+          task_type?: string
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      user_tasks: {
+        Row: {
+          claimed_at: string | null
+          completed_at: string | null
+          created_at: string | null
+          id: string
+          reward_earned: number | null
+          status: Database["public"]["Enums"]["task_status"] | null
+          task_id: string
+          user_id: string
+        }
+        Insert: {
+          claimed_at?: string | null
+          completed_at?: string | null
+          created_at?: string | null
+          id?: string
+          reward_earned?: number | null
+          status?: Database["public"]["Enums"]["task_status"] | null
+          task_id: string
+          user_id: string
+        }
+        Update: {
+          claimed_at?: string | null
+          completed_at?: string | null
+          created_at?: string | null
+          id?: string
+          reward_earned?: number | null
+          status?: Database["public"]["Enums"]["task_status"] | null
+          task_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_tasks_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_tasks_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      users: {
+        Row: {
+          bim_balance: number
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          last_activity_at: string | null
+          oba_balance: number
+          referral_code: string | null
+          referred_by: string | null
+          total_deposited: number
+          total_earned_from_referrals: number
+          total_earned_from_tasks: number
+          total_mined: number
+          updated_at: string | null
+          wallet_address: string
+        }
+        Insert: {
+          bim_balance?: number
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          last_activity_at?: string | null
+          oba_balance?: number
+          referral_code?: string | null
+          referred_by?: string | null
+          total_deposited?: number
+          total_earned_from_referrals?: number
+          total_earned_from_tasks?: number
+          total_mined?: number
+          updated_at?: string | null
+          wallet_address: string
+        }
+        Update: {
+          bim_balance?: number
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          last_activity_at?: string | null
+          oba_balance?: number
+          referral_code?: string | null
+          referred_by?: string | null
+          total_deposited?: number
+          total_earned_from_referrals?: number
+          total_earned_from_tasks?: number
+          total_mined?: number
+          updated_at?: string | null
+          wallet_address?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "users_referred_by_fkey"
+            columns: ["referred_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -23,7 +385,10 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      deposit_status: "pending" | "confirmed" | "failed"
+      mining_status: "active" | "completed" | "claimed"
+      referral_status: "pending" | "completed"
+      task_status: "available" | "completed" | "claimed"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +515,11 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      deposit_status: ["pending", "confirmed", "failed"],
+      mining_status: ["active", "completed", "claimed"],
+      referral_status: ["pending", "completed"],
+      task_status: ["available", "completed", "claimed"],
+    },
   },
 } as const
