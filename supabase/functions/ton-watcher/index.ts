@@ -95,12 +95,7 @@ async function checkDeposits() {
       console.log('No events found in response')
       return new Response(JSON.stringify({
         success: true,
-        processed_deposits: processedCount,
-        checked_transactions: 0
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      })
-    }
+        processed_deposits: 0,
         checked_transactions: 0
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -187,11 +182,31 @@ async function processDeposit(depositComment: string, txHash: string, amount: st
       return
     }
 
-    // Update deposit status
+    // Mint actual jetton tokens
+    console.log(`Minting ${pendingDeposit.bim_amount} BIM tokens for ${pendingDeposit.users.wallet_address}`)
+    
+    const mintResponse = await supabase.functions.invoke('jetton-minter', {
+      body: {
+        user_wallet: pendingDeposit.users.wallet_address,
+        bim_amount: pendingDeposit.bim_amount,
+        deposit_id: pendingDeposit.id,
+      },
+    });
+
+    let jettonMintHash = null;
+    if (mintResponse.data && !mintResponse.error) {
+      jettonMintHash = mintResponse.data.mint_hash;
+      console.log('Jetton minted successfully:', jettonMintHash);
+    } else {
+      console.error('Jetton minting failed:', mintResponse.error);
+    }
+
+    // Update deposit status with both deposit hash and mint hash
     const { error: updateError } = await supabase
       .from('deposits')
       .update({
         deposit_hash: txHash,
+        jetton_mint_hash: jettonMintHash,
         status: 'confirmed',
         processed_at: new Date().toISOString()
       })
