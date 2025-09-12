@@ -162,7 +162,7 @@ async function mintTokens(req: Request) {
 
     // Initialize TON client
     const client = new TonClient({
-      endpoint: 'https://toncenter.com/api/v2/jsonRPC',
+      endpoint: 'https://mainnet.tonhubapi.com/jsonrpc',
     })
 
     // Create wallet from mnemonic
