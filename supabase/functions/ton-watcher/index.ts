@@ -142,9 +142,9 @@ async function checkDeposits() {
             continue
           }
 
-          // Trigger mint process
+          // Trigger jetton minting process
           try {
-            const mintResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/ton-watcher/process-mint`, {
+            const mintResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/jetton-minter/mint`, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
@@ -158,10 +158,12 @@ async function checkDeposits() {
             })
 
             if (!mintResponse.ok) {
-              console.error(`Mint request failed: ${mintResponse.status}`)
+              console.error(`Jetton mint request failed: ${mintResponse.status}`)
+            } else {
+              console.log(`Jetton minting initiated for deposit ${pendingDeposit.id}`)
             }
           } catch (mintError) {
-            console.error(`Mint process error: ${mintError.message}`)
+            console.error(`Jetton mint process error: ${mintError.message}`)
           }
 
           processedCount++

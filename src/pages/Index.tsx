@@ -6,6 +6,7 @@ import MiningCard from '@/components/MiningCard';
 import TaskCard from '@/components/TaskCard';
 import ReferralCard from '@/components/ReferralCard';
 import WalletConnectButton from '@/components/WalletConnectButton';
+import JettonMinterManager from '@/components/JettonMinterManager';
 import { Card, CardContent } from '@/components/ui/card';
 import { Wallet, TrendingUp, Users, Trophy } from 'lucide-react';
 import { useReferral } from '@/hooks/useReferral';
@@ -65,9 +66,10 @@ const Index = () => {
                 <TaskCard />
               </div>
 
-              {/* Right column - Referrals and Stats */}
+              {/* Right column - Referrals and Minter */}
               <div className="space-y-6">
                 <ReferralCard />
+                <JettonMinterManager />
                 
                 {/* Quick Stats */}
                 <Card className="enhanced-card">
