@@ -79,8 +79,8 @@ async function checkDeposits() {
   // Only process deposits that have actual blockchain transaction evidence
 
   try {
-    // Get recent transactions to treasury using TON API (public endpoint)
-    const apiUrl = `https://tonapi.io/v2/accounts/${TREASURY_ADDRESS}/events?limit=20`
+    // Get recent transactions to treasury using TON Hub API (more reliable)
+    const apiUrl = `https://mainnet.tonhubapi.com/accounts/${TREASURY_ADDRESS}/transactions?limit=20`
     console.log(`Fetching transactions from: ${apiUrl}`)
     
     const response = await fetch(apiUrl, {
@@ -351,8 +351,8 @@ async function getBalance(params: URLSearchParams) {
   }
 
   try {
-    // Get TON balance using TON API (public endpoint)
-    const response = await fetch(`https://tonapi.io/v2/accounts/${walletAddress}`, {
+    // Get TON balance using TON Hub API (more reliable)
+    const response = await fetch(`https://mainnet.tonhubapi.com/accounts/${walletAddress}`, {
       headers: {
         'Content-Type': 'application/json'
       }
