@@ -68,13 +68,18 @@ const BalanceCard = () => {
         // Fallback to user profile data if ton-watcher fails
         console.log('TON balance service unavailable, using user profile data');
         const userProfile = await bimCoinAPI.getUserProfile(address);
-        if (userProfile.success) {
+        if (userProfile.success && userProfile.data) {
           setBalances({
             ton: 0, // TON balance not available
             bim: parseFloat(userProfile.data.bim_balance || '0'),
             oba: parseFloat(userProfile.data.oba_balance || '0')
           });
           setUser(userProfile.data);
+          toast({
+            title: "Partial balance data",
+            description: "TON balance unavailable, showing BIM/OBA balances",
+            variant: "default",
+          });
         } else {
           throw new Error('Failed to fetch any balance data');
         }
@@ -85,7 +90,7 @@ const BalanceCard = () => {
       // Final fallback - try to get at least BIM/OBA from user profile
       try {
         const userProfile = await bimCoinAPI.getUserProfile(address);
-        if (userProfile.success) {
+        if (userProfile.success && userProfile.data) {
           setBalances({
             ton: 0,
             bim: parseFloat(userProfile.data.bim_balance || '0'),

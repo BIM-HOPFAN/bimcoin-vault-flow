@@ -12,8 +12,7 @@ const supabase = createClient(
 )
 
 const TON_CENTER_API_KEY = Deno.env.get('TON_CENTER_API_KEY')
-  const TON_CENTER_API_KEY = Deno.env.get('TON_CENTER_API_KEY')
-  const TREASURY_ADDRESS = Deno.env.get('TREASURY_ADDRESS')
+const TREASURY_ADDRESS = Deno.env.get('TREASURY_ADDRESS')
 const MINTER_ADDRESS = Deno.env.get('MINTER_ADDRESS')
 
 Deno.serve(async (req) => {
