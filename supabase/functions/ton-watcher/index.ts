@@ -134,11 +134,9 @@ async function checkDeposits() {
             continue
           }
 
-              // Process the deposit
-              await processDeposit(depositComment, txHash, amount)
-              processedCount++
-            }
-          }
+          // Process the deposit
+          await processDeposit(depositComment, txHash, amount)
+          processedCount++
         }
       }
     }
