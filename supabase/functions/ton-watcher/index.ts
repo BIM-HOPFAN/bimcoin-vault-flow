@@ -61,10 +61,14 @@ async function checkDeposits() {
   console.log('Checking for new deposits...')
 
   try {
-    // Get recent transactions to treasury
-    const response = await fetch(`https://toncenter.com/api/v2/getTransactions?address=${TREASURY_ADDRESS}&limit=20&archival=false`, {
+    // Get recent transactions to treasury using the correct API endpoint
+    const apiUrl = `https://toncenter.com/api/v3/transactions?account=${TREASURY_ADDRESS}&limit=20&sort_order=desc`
+    console.log(`Fetching transactions from: ${apiUrl}`)
+    
+    const response = await fetch(apiUrl, {
       headers: {
-        'X-API-Key': TON_CENTER_API_KEY || ''
+        'X-API-Key': TON_CENTER_API_KEY || '',
+        'Content-Type': 'application/json'
       }
     })
 
@@ -73,21 +77,30 @@ async function checkDeposits() {
     }
 
     const data = await response.json()
+    console.log(`API Response:`, data)
     
-    if (!data.ok || !data.result) {
-      throw new Error('Invalid response from TON Center API')
+    if (!data.transactions) {
+      console.log('No transactions found in response')
+      return new Response(JSON.stringify({
+        success: true,
+        processed_deposits: 0,
+        checked_transactions: 0
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
     }
 
     let processedCount = 0
 
-    for (const tx of data.result) {
-      if (tx.in_msg && tx.in_msg.message) {
-        const message = tx.in_msg.message
+    for (const tx of data.transactions) {
+      // Check for incoming messages with comments
+      if (tx.in_msg && tx.in_msg.msg_data && tx.in_msg.msg_data.text) {
+        const message = tx.in_msg.msg_data.text
         
         // Check if message contains deposit comment format
-        if (message && typeof message === 'string' && message.startsWith('BIM:DEPOSIT:')) {
+        if (message && message.startsWith('BIM:DEPOSIT:')) {
           const depositComment = message
-          const txHash = tx.transaction_id.hash
+          const txHash = tx.hash
           const amount = tx.in_msg.value ? (parseInt(tx.in_msg.value) / 1000000000).toString() : '0'
 
           console.log(`Found deposit: ${depositComment}, hash: ${txHash}, amount: ${amount} TON`)
@@ -285,10 +298,11 @@ async function getBalance(params: URLSearchParams) {
   }
 
   try {
-    // Get TON balance
-    const response = await fetch(`https://toncenter.com/api/v2/getAddressInformation?address=${walletAddress}`, {
+    // Get TON balance using v3 API
+    const response = await fetch(`https://toncenter.com/api/v3/account?account=${walletAddress}`, {
       headers: {
-        'X-API-Key': TON_CENTER_API_KEY || ''
+        'X-API-Key': TON_CENTER_API_KEY || '',
+        'Content-Type': 'application/json'
       }
     })
 
@@ -297,12 +311,9 @@ async function getBalance(params: URLSearchParams) {
     }
 
     const data = await response.json()
+    console.log(`Balance API Response:`, data)
     
-    if (!data.ok) {
-      throw new Error('Invalid response from TON Center API')
-    }
-
-    const tonBalance = data.result?.balance ? (parseInt(data.result.balance) / 1000000000).toString() : '0'
+    const tonBalance = data.balance ? (parseInt(data.balance) / 1000000000).toString() : '0'
 
     // Get user's BIM/OBA balances from database
     const { data: user } = await supabase

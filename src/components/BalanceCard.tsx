@@ -79,10 +79,38 @@ const BalanceCard = () => {
     }
   };
 
+  // Trigger deposit check to process pending deposits
+  const triggerDepositCheck = async () => {
+    try {
+      console.log('Checking for pending deposits...');
+      const response = await fetch('https://xyskyvwxbpnlveamxwlb.supabase.co/functions/v1/ton-watcher/check-deposits', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+      const result = await response.json();
+      console.log('Deposit check result:', result);
+      
+      if (result.processed_deposits > 0) {
+        toast({
+          title: "Deposits Processed",
+          description: `Successfully processed ${result.processed_deposits} deposit(s)! Your BIM balance has been updated.`,
+        });
+        // Refresh balances after processing deposits
+        setTimeout(() => fetchBalances(), 2000);
+      }
+    } catch (error) {
+      console.error('Error checking deposits:', error);
+    }
+  };
+
   useEffect(() => {
     if (address) {
       initializeUser(address);
       fetchBalances();
+      // Check for pending deposits that might need processing
+      setTimeout(() => triggerDepositCheck(), 3000);
     } else {
       setBalances({ ton: 0, bim: 0, oba: 0 });
       setUser(null);
