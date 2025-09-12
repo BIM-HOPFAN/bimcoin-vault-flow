@@ -145,7 +145,7 @@ async function checkDeposits() {
     return new Response(JSON.stringify({
       success: true,
       processed_deposits: processedCount,
-      checked_transactions: data.events?.length || 0
+      checked_transactions: data.result?.length || 0
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
