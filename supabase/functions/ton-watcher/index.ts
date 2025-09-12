@@ -205,15 +205,6 @@ async function processDeposit(depositComment: string, txHash: string, amount: st
   }
 }
 
-  } catch (error) {
-    console.error('Error checking deposits:', error)
-    return new Response(JSON.stringify({ error: error.message }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    })
-  }
-}
-
 async function checkBurns() {
   console.log('Checking for burn transactions...')
 
