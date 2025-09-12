@@ -40,6 +40,8 @@ Deno.serve(async (req) => {
           return await deployJettonMinter()
         } else if (path === 'mint') {
           return await mintTokens(req)
+        } else if (path === 'reprocess-deposit') {
+          return await reprocessDeposit(req)
         }
         break
 
@@ -260,5 +262,81 @@ async function getMinterInfo() {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
+}
+
+async function reprocessDeposit(req: Request) {
+  const { deposit_id } = await req.json()
+  
+  try {
+    // Get the deposit details
+    const { data: deposit, error } = await supabase
+      .from('deposits')
+      .select('*, users(*)')
+      .eq('id', deposit_id)
+      .eq('status', 'confirmed')
+      .single()
+
+    if (error || !deposit) {
+      throw new Error('Deposit not found or not confirmed')
+    }
+
+    // Check if it has a fake mint hash (starts with 'retroactive_mint_' or 'mint_')
+    if (!deposit.jetton_mint_hash || 
+        deposit.jetton_mint_hash.startsWith('retroactive_mint_') || 
+        deposit.jetton_mint_hash.startsWith('mint_')) {
+      
+      console.log(`Reprocessing deposit ${deposit_id} for real minting`)
+      
+      // Call the real minting function
+      const mintResult = await mintTokens(new Request('https://dummy.com/mint', {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'mint',
+          user_wallet: deposit.users.wallet_address,
+          bim_amount: deposit.bim_amount,
+          deposit_id: deposit.id
+        })
+      }))
+
+      const mintData = await mintResult.json()
+      
+      if (mintData.success) {
+        // Update deposit with real mint hash
+        const { error: updateError } = await supabase
+          .from('deposits')
+          .update({
+            jetton_mint_hash: mintData.mint_hash,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', deposit_id)
+
+        if (updateError) throw updateError
+
+        return new Response(JSON.stringify({
+          success: true,
+          message: 'Deposit reprocessed successfully',
+          real_mint_hash: mintData.mint_hash
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        })
+      } else {
+        throw new Error(mintData.error || 'Minting failed')
+      }
+    } else {
+      return new Response(JSON.stringify({
+        success: false,
+        message: 'Deposit already has real mint hash'
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
+    }
+
+  } catch (error) {
+    console.error('Error reprocessing deposit:', error)
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    })
   }
+}
 }
