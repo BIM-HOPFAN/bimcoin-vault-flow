@@ -99,9 +99,19 @@ const BalanceCard = () => {
         });
         // Refresh balances after processing deposits
         setTimeout(() => fetchBalances(), 2000);
+      } else {
+        toast({
+          title: "No Deposits to Process",
+          description: "No pending deposits found or they are too recent (wait 2 minutes after depositing).",
+        });
       }
     } catch (error) {
       console.error('Error checking deposits:', error);
+      toast({
+        title: "Error Processing Deposits",
+        description: "There was an error processing your deposits. Please try again.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -196,6 +206,16 @@ const BalanceCard = () => {
           >
             <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
             Refresh
+          </Button>
+
+          <Button 
+            onClick={triggerDepositCheck}
+            disabled={!address}
+            variant="outline"
+            size="sm"
+            className="flex-1 border-border/50 hover:border-primary/30"
+          >
+            Process Deposits
           </Button>
           
           <Button 
