@@ -70,81 +70,8 @@ async function checkDeposits() {
 
   console.log(`Using treasury address: ${TREASURY_ADDRESS}`)
 
-  // First, let's manually process any pending deposits older than 2 minutes
-  // This assumes if someone made a deposit and we can see their TON was deducted, the transaction went through
-  try {
-    const { data: pendingDeposits } = await supabase
-      .from('deposits')
-      .select('*, users(*)')
-      .eq('status', 'pending')
-      .order('created_at', { ascending: false })
-      .limit(20)
-
-    let processedCount = 0
-
-    if (pendingDeposits && pendingDeposits.length > 0) {
-      console.log(`Found ${pendingDeposits.length} pending deposits`)
-      
-      for (const deposit of pendingDeposits) {
-        const depositTime = new Date(deposit.created_at).getTime()
-        const now = Date.now()
-        const twoMinutes = 2 * 60 * 1000
-
-        if (now - depositTime > twoMinutes) {
-          console.log(`Processing pending deposit: ${deposit.deposit_comment} for user ${deposit.users.wallet_address}`)
-          
-          // Update deposit status
-          const { error: updateError } = await supabase
-            .from('deposits')
-            .update({
-              deposit_hash: 'manual_' + Date.now(),
-              status: 'confirmed',
-              processed_at: new Date().toISOString()
-            })
-            .eq('id', deposit.id)
-
-          if (updateError) {
-            console.error(`Failed to update deposit: ${updateError.message}`)
-            continue
-          }
-
-          // Update user's BIM balance
-          const newBimBalance = parseFloat(deposit.users.bim_balance || 0) + parseFloat(deposit.bim_amount)
-          const newTotalDeposited = parseFloat(deposit.users.total_deposited || 0) + parseFloat(deposit.ton_amount)
-
-          const { error: userUpdateError } = await supabase
-            .from('users')
-            .update({
-              bim_balance: newBimBalance,
-              total_deposited: newTotalDeposited
-            })
-            .eq('id', deposit.user_id)
-
-          if (userUpdateError) {
-            console.error(`Failed to update user balance: ${userUpdateError.message}`)
-            continue
-          }
-
-          console.log(`Successfully processed deposit: Added ${deposit.bim_amount} BIM to user ${deposit.users.wallet_address}`)
-          processedCount++
-        }
-      }
-    }
-
-    if (processedCount > 0) {
-      return new Response(JSON.stringify({
-        success: true,
-        processed_deposits: processedCount,
-        method: 'manual_processing',
-        message: `Processed ${processedCount} pending deposits`
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      })
-    }
-
-  } catch (error) {
-    console.error('Error in manual deposit processing:', error)
-  }
+  // Remove automatic processing of pending deposits without transaction verification
+  // Only process deposits that have actual blockchain transaction evidence
 
   try {
     // Get recent transactions to treasury using TON API (public endpoint)
