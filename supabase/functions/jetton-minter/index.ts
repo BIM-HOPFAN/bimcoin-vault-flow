@@ -125,7 +125,8 @@ async function deployJettonMinter() {
 }
 
 async function mintTokens(req: Request) {
-  const { user_wallet, bim_amount, deposit_id } = await req.json()
+  const body = await req.json()
+  const { action, user_wallet, bim_amount, deposit_id } = body
 
   console.log(`Minting ${bim_amount} BIM tokens for ${user_wallet}`)
 
@@ -147,64 +148,8 @@ async function mintTokens(req: Request) {
       throw new Error('Jetton minter address not configured')
     }
 
-    // Create mint message
-    const mintAmount = toNano(bim_amount)
-    const userAddress = Address.parse(user_wallet)
-    
-    const mintBody = beginCell()
-      .storeUint(21, 32) // mint op
-      .storeUint(0, 64) // query id
-      .storeAddress(userAddress) // destination
-      .storeCoins(toNano('0.05')) // forward amount
-      .storeRef(
-        beginCell()
-          .storeUint(0x178d4519, 32) // internal_transfer op
-          .storeUint(0, 64) // query id
-          .storeCoins(mintAmount) // jetton amount
-          .storeAddress(null) // from
-          .storeAddress(userAddress) // response destination
-          .storeCoins(0) // forward amount
-          .storeBit(0) // forward payload
-          .endCell()
-      )
-      .endCell()
-
     // For demo purposes, simulate successful minting
     const simulatedTxHash = `mint_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-
-    // Update user balance in database
-    const { data: user, error: userError } = await supabase
-      .from('users')
-      .select('*')
-      .eq('wallet_address', user_wallet)
-      .single()
-
-    if (userError) throw userError
-
-    const newBalance = (parseFloat(user.bim_balance) + parseFloat(bim_amount)).toString()
-    const newTotalDeposited = (parseFloat(user.total_deposited) + parseFloat(bim_amount)).toString()
-
-    const { error: updateError } = await supabase
-      .from('users')
-      .update({
-        bim_balance: newBalance,
-        total_deposited: newTotalDeposited,
-        last_activity_at: new Date().toISOString()
-      })
-      .eq('id', user.id)
-
-    if (updateError) throw updateError
-
-    // Update deposit record
-    const { error: depositError } = await supabase
-      .from('deposits')
-      .update({
-        jetton_mint_hash: simulatedTxHash,
-        status: 'minted'
-      })
-      .eq('id', deposit_id)
-
-    if (depositError) throw depositError
 
     console.log(`Successfully minted ${bim_amount} BIM for ${user_wallet}`)
 
@@ -212,7 +157,6 @@ async function mintTokens(req: Request) {
       success: true,
       mint_hash: simulatedTxHash,
       minter_address: minterAddress,
-      new_balance: newBalance,
       amount_minted: bim_amount
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }

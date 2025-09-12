@@ -65,15 +65,53 @@ const BalanceCard = () => {
           oba: parseFloat(balanceData.oba_balance || '0')
         });
       } else {
-        throw new Error(balanceData.error || 'Failed to fetch balances');
+        // Fallback to user profile data if ton-watcher fails
+        console.log('TON balance service unavailable, using user profile data');
+        const userProfile = await bimCoinAPI.getUserProfile(address);
+        if (userProfile.success) {
+          setBalances({
+            ton: 0, // TON balance not available
+            bim: parseFloat(userProfile.data.bim_balance || '0'),
+            oba: parseFloat(userProfile.data.oba_balance || '0')
+          });
+          setUser(userProfile.data);
+        } else {
+          throw new Error('Failed to fetch any balance data');
+        }
       }
     } catch (error) {
       console.error('Failed to fetch balances:', error);
-      toast({
-        title: "Failed to fetch balances",
-        description: "There was an error getting your wallet balances",
-        variant: "destructive",
-      });
+      
+      // Final fallback - try to get at least BIM/OBA from user profile
+      try {
+        const userProfile = await bimCoinAPI.getUserProfile(address);
+        if (userProfile.success) {
+          setBalances({
+            ton: 0,
+            bim: parseFloat(userProfile.data.bim_balance || '0'),
+            oba: parseFloat(userProfile.data.oba_balance || '0')
+          });
+          setUser(userProfile.data);
+          toast({
+            title: "Partial balance data",
+            description: "TON balance unavailable, showing BIM/OBA from cache",
+            variant: "default",
+          });
+        } else {
+          toast({
+            title: "Failed to fetch balances",
+            description: "There was an error getting your wallet balances",
+            variant: "destructive",
+          });
+        }
+      } catch (fallbackError) {
+        console.error('Fallback balance fetch failed:', fallbackError);
+        toast({
+          title: "Failed to fetch balances",
+          description: "There was an error getting your wallet balances",
+          variant: "destructive",
+        });
+      }
     } finally {
       setLoading(false);
     }

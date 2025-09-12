@@ -185,20 +185,31 @@ async function processDeposit(depositComment: string, txHash: string, amount: st
     // Mint actual jetton tokens
     console.log(`Minting ${pendingDeposit.bim_amount} BIM tokens for ${pendingDeposit.users.wallet_address}`)
     
-    const mintResponse = await supabase.functions.invoke('jetton-minter', {
-      body: {
+    const mintResponse = await fetch('https://xyskyvwxbpnlveamxwlb.supabase.co/functions/v1/jetton-minter/mint', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
+      },
+      body: JSON.stringify({
+        action: 'mint',
         user_wallet: pendingDeposit.users.wallet_address,
         bim_amount: pendingDeposit.bim_amount,
         deposit_id: pendingDeposit.id,
-      },
+      })
     });
 
     let jettonMintHash = null;
-    if (mintResponse.data && !mintResponse.error) {
-      jettonMintHash = mintResponse.data.mint_hash;
-      console.log('Jetton minted successfully:', jettonMintHash);
+    if (mintResponse.ok) {
+      const mintData = await mintResponse.json();
+      if (mintData.success) {
+        jettonMintHash = mintData.mint_hash;
+        console.log('Jetton minted successfully:', jettonMintHash);
+      } else {
+        console.error('Jetton minting failed:', mintData.error);
+      }
     } else {
-      console.error('Jetton minting failed:', mintResponse.error);
+      console.error('Jetton minting request failed:', mintResponse.status, await mintResponse.text());
     }
 
     // Update deposit status with both deposit hash and mint hash
