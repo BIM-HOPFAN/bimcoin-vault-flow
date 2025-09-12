@@ -58,7 +58,7 @@ const BalanceCard = () => {
     try {
       const balanceData = await bimCoinAPI.getBalance(address);
       
-      if (balanceData.success || balanceData.ton_balance !== undefined) {
+      if (balanceData.success) {
         setBalances({
           ton: parseFloat(balanceData.ton_balance || '0'),
           bim: parseFloat(balanceData.bim_balance || '0'),

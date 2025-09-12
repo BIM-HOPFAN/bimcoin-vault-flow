@@ -115,8 +115,24 @@ export class BimCoinAPI {
 
   // TON Watcher API
   async getBalance(walletAddress: string) {
-    const response = await fetch(`${this.baseUrl}/ton-watcher/balance?wallet_address=${walletAddress}`)
-    return await response.json()
+    try {
+      const response = await fetch(`${this.baseUrl}/ton-watcher/balance?wallet_address=${walletAddress}`)
+      const data = await response.json()
+      
+      if (!response.ok) {
+        return { success: false, error: data.error || 'Failed to fetch balance' }
+      }
+      
+      return { 
+        success: true, 
+        ton_balance: data.ton_balance,
+        bim_balance: data.bim_balance,
+        oba_balance: data.oba_balance
+      }
+    } catch (error) {
+      console.error('Balance API error:', error)
+      return { success: false, error: 'Network error' }
+    }
   }
 
   async checkDeposits() {
