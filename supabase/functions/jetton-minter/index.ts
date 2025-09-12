@@ -153,14 +153,73 @@ async function mintTokens(req: Request) {
       throw new Error('Jetton minter address not configured')
     }
 
-    // For demo purposes, simulate successful minting
-    const simulatedTxHash = `mint_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    // Import TON SDK
+    const { TonClient, WalletContractV4, internal } = await import('https://esm.sh/@ton/ton@15.3.1')
+    const { mnemonicToPrivateKey } = await import('https://esm.sh/@ton/crypto@3.3.0')
+    const { Address, beginCell, toNano } = await import('https://esm.sh/@ton/core@0.61.0')
 
-    console.log(`Successfully minted ${bim_amount} BIM for ${user_wallet}`)
+    // Initialize TON client
+    const client = new TonClient({
+      endpoint: 'https://toncenter.com/api/v2/jsonRPC',
+    })
+
+    // Create wallet from mnemonic
+    const keyPair = await mnemonicToPrivateKey(ADMIN_MNEMONIC.split(' '))
+    const wallet = WalletContractV4.create({ workchain: 0, publicKey: keyPair.publicKey })
+    const contract = client.open(wallet)
+
+    // Parse addresses
+    const minterAddr = Address.parse(minterAddress)
+    const userAddr = Address.parse(user_wallet)
+
+    // Convert BIM amount to nano tokens (assuming 9 decimals)
+    const jettonAmount = toNano(bim_amount.toString())
+
+    // Create internal message for jetton minting
+    const internalMessage = beginCell()
+      .storeUint(0x18, 6) // internal message, bounce = true
+      .storeAddress(minterAddr)
+      .storeCoins(toNano('0.1')) // TON for gas
+      .storeUint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1 + 1)
+      .storeUint(21, 32) // op::mint()
+      .storeUint(0, 64) // query_id
+      .storeAddress(userAddr) // to_address
+      .storeCoins(toNano('0.05')) // amount for wallet creation
+      .storeRef(
+        beginCell()
+          .storeUint(0x178d4519, 32) // internal_transfer op
+          .storeUint(0, 64) // query_id
+          .storeCoins(jettonAmount) // jetton_amount
+          .storeAddress(null) // from_address (null for minting)
+          .storeAddress(userAddr) // response_address
+          .storeCoins(0) // forward_ton_amount
+          .storeBit(false) // forward_payload in this slice
+          .endCell()
+      )
+      .endCell()
+
+    // Send transaction
+    const seqno = await contract.getSeqno()
+    const transfer = contract.createTransfer({
+      seqno,
+      secretKey: keyPair.secretKey,
+      messages: [internal({
+        to: minterAddr,
+        value: toNano('0.1'),
+        body: internalMessage
+      })]
+    })
+
+    await contract.send(transfer)
+
+    // Calculate transaction hash
+    const txHash = transfer.hash().toString('hex')
+
+    console.log(`Successfully minted ${bim_amount} BIM for ${user_wallet}, tx: ${txHash}`)
 
     return new Response(JSON.stringify({
       success: true,
-      mint_hash: simulatedTxHash,
+      mint_hash: txHash,
       minter_address: minterAddress,
       amount_minted: bim_amount
     }), {
