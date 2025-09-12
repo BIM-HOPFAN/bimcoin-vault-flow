@@ -107,7 +107,7 @@ const DepositCard = () => {
         
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Coins className="w-4 h-4" />
-          <span>Exchange Rate: 1 TON = 1,000 BIM</span>
+          <span>Exchange Rate: 1 TON = 200 BIM</span>
         </div>
 
         <Button 
