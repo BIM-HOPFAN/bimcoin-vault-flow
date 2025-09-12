@@ -12,7 +12,8 @@ const supabase = createClient(
 )
 
 const TON_CENTER_API_KEY = Deno.env.get('TON_CENTER_API_KEY')
-const TREASURY_ADDRESS = Deno.env.get('TREASURY_ADDRESS')
+  const TON_CENTER_API_KEY = Deno.env.get('TON_CENTER_API_KEY')
+  const TREASURY_ADDRESS = Deno.env.get('TREASURY_ADDRESS')
 const MINTER_ADDRESS = Deno.env.get('MINTER_ADDRESS')
 
 Deno.serve(async (req) => {
@@ -80,7 +81,7 @@ async function checkDeposits() {
 
   try {
     // Get recent transactions to treasury using TON Center API with API key
-    const apiUrl = `https://toncenter.com/api/v2/getTransactions?address=${TREASURY_ADDRESS}&limit=20&api_key=5d06654f912fed525feb10c1608af9dcd8e06dc5aa2eb2927e2643b1965afa78`
+    const apiUrl = `https://toncenter.com/api/v2/getTransactions?address=${TREASURY_ADDRESS}&limit=20&api_key=${TON_CENTER_API_KEY}`
     console.log(`Fetching transactions from: ${apiUrl}`)
     
     const response = await fetch(apiUrl, {
@@ -347,7 +348,7 @@ async function getBalance(params: URLSearchParams) {
 
   try {
     // Get TON balance using TON Center API with API key  
-    const response = await fetch(`https://toncenter.com/api/v2/getAddressInformation?address=${walletAddress}&api_key=5d06654f912fed525feb10c1608af9dcd8e06dc5aa2eb2927e2643b1965afa78`, {
+    const response = await fetch(`https://toncenter.com/api/v2/getAddressInformation?address=${walletAddress}&api_key=${TON_CENTER_API_KEY}`, {
       headers: {
         'Content-Type': 'application/json'
       }
