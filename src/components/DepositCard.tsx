@@ -46,19 +46,28 @@ const DepositCard = () => {
         throw new Error(intentResult.error);
       }
 
-      // Create transaction without payload - TON Connect will handle it as a simple transfer
+      // Create transaction with deposit comment for tracking
       const transaction = {
         validUntil: Math.floor(Date.now() / 1000) + 300, // 5 minutes
         messages: [
           {
             address: intentResult.treasury_address,
             amount: (depositAmount * 1e9).toString(), // Convert to nanoTONs
-            // Remove payload - simple transfer without comment for now
+            payload: Buffer.from(intentResult.deposit_comment, 'utf-8').toString('base64'), // Base64 encode comment
           },
         ],
       };
 
       await tonConnectUI.sendTransaction(transaction);
+      
+      // Wait a bit for transaction to be mined, then check for deposits
+      setTimeout(async () => {
+        try {
+          await bimCoinAPI.checkDeposits();
+        } catch (error) {
+          console.log('Deposit check error:', error);
+        }
+      }, 10000); // Wait 10 seconds
       
       toast({
         title: "Deposit initiated",
