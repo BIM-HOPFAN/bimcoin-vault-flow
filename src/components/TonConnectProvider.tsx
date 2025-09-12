@@ -6,7 +6,7 @@ interface TonConnectProviderProps {
 }
 
 const TonConnectProvider = ({ children }: TonConnectProviderProps) => {
-  const manifestUrl = '/tonconnect-manifest.json';
+  const manifestUrl = 'https://id-preview--db23b08d-08a2-4e7e-b648-6f394e9e12c2.lovable.app/tonconnect-manifest.json';
 
   return (
     <TonConnectUIProvider 
