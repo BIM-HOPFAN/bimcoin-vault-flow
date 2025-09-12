@@ -7,6 +7,16 @@ import { ArrowDownCircle, Coins } from 'lucide-react';
 import { useTonAddress, useTonConnectUI } from '@tonconnect/ui-react';
 import { useToast } from '@/hooks/use-toast';
 import { bimCoinAPI } from '@/lib/api';
+import { beginCell } from '@ton/core';
+
+// Helper function to create comment payload
+const createCommentPayload = (comment: string) => {
+  const cell = beginCell()
+    .storeUint(0, 32) // op code for text comment
+    .storeStringTail(comment) // the comment text
+    .endCell();
+  return cell.toBoc().toString('base64');
+};
 
 const DepositCard = () => {
   const [amount, setAmount] = useState('');
@@ -46,19 +56,19 @@ const DepositCard = () => {
         throw new Error(intentResult.error);
       }
 
-      // Create transaction with deposit comment for tracking
+      // Create transaction with proper BOC payload format
       const transaction = {
         validUntil: Math.floor(Date.now() / 1000) + 300, // 5 minutes
         messages: [
           {
             address: intentResult.treasury_address,
             amount: (depositAmount * 1e9).toString(), // Convert to nanoTONs
-            payload: Buffer.from(intentResult.deposit_comment, 'utf-8').toString('base64'), // Base64 encode comment
+            payload: createCommentPayload(intentResult.deposit_comment),
           },
         ],
       };
 
-      await tonConnectUI.sendTransaction(transaction);
+      const txResult = await tonConnectUI.sendTransaction(transaction);
       
       // Wait a bit for transaction to be mined, then check for deposits
       setTimeout(async () => {
