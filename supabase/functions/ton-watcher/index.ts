@@ -346,7 +346,7 @@ async function getBalance(params: URLSearchParams) {
   }
 
   try {
-    // Get TON balance using TON Center API with API key
+    // Get TON balance using TON Center API with API key  
     const response = await fetch(`https://toncenter.com/api/v2/getAddressInformation?address=${walletAddress}&api_key=5d06654f912fed525feb10c1608af9dcd8e06dc5aa2eb2927e2643b1965afa78`, {
       headers: {
         'Content-Type': 'application/json'
@@ -354,7 +354,21 @@ async function getBalance(params: URLSearchParams) {
     })
 
     if (!response.ok) {
-      throw new Error(`TON API error: ${response.status}`)
+      console.error(`TON Center API error: ${response.status}`)
+      // Fall back to 0 balance if API fails
+      const { data: user } = await supabase
+        .from('users')
+        .select('bim_balance, oba_balance')
+        .eq('wallet_address', walletAddress)
+        .maybeSingle()
+
+      return new Response(JSON.stringify({
+        ton_balance: '0',
+        bim_balance: user?.bim_balance || '0',
+        oba_balance: user?.oba_balance || '0'
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
     }
 
     const data = await response.json()
@@ -367,7 +381,7 @@ async function getBalance(params: URLSearchParams) {
       .from('users')
       .select('bim_balance, oba_balance')
       .eq('wallet_address', walletAddress)
-      .single()
+      .maybeSingle()
 
     return new Response(JSON.stringify({
       ton_balance: tonBalance,
