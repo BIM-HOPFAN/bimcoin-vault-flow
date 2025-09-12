@@ -79,8 +79,8 @@ async function checkDeposits() {
   // Only process deposits that have actual blockchain transaction evidence
 
   try {
-    // Get recent transactions to treasury using TON Hub API (more reliable)
-    const apiUrl = `https://mainnet.tonhubapi.com/accounts/${TREASURY_ADDRESS}/transactions?limit=20`
+    // Get recent transactions to treasury using TON Center API with API key
+    const apiUrl = `https://toncenter.com/api/v2/getTransactions?address=${TREASURY_ADDRESS}&limit=20&api_key=5d06654f912fed525feb10c1608af9dcd8e06dc5aa2eb2927e2643b1965afa78`
     console.log(`Fetching transactions from: ${apiUrl}`)
     
     const response = await fetch(apiUrl, {
@@ -96,8 +96,8 @@ async function checkDeposits() {
     const data = await response.json()
     console.log(`API Response:`, data)
     
-    if (!data.events) {
-      console.log('No events found in response')
+    if (!data.result) {
+      console.log('No result found in response')
       return new Response(JSON.stringify({
         success: true,
         processed_deposits: 0,
@@ -109,33 +109,30 @@ async function checkDeposits() {
 
     let processedCount = 0
 
-    for (const event of data.events) {
+    for (const tx of data.result) {
       // Check for incoming transactions with comments
-      if (event.actions && event.actions.length > 0) {
-        for (const action of event.actions) {
-          if (action.type === 'TonTransfer' && action.TonTransfer) {
-            const transfer = action.TonTransfer
-            const comment = transfer.comment
-            
-            // Check if message contains deposit comment format
-            if (comment && comment.startsWith('BIM:DEPOSIT:')) {
-              const depositComment = comment
-              const txHash = event.event_id
-              const amount = transfer.amount ? (parseInt(transfer.amount) / 1000000000).toString() : '0'
+      if (tx.in_msg && tx.in_msg.message) {
+        const comment = tx.in_msg.message
+        
+        // Check if message contains deposit comment format
+        if (comment && comment.startsWith('BIM:DEPOSIT:')) {
+          const depositComment = comment
+          const txHash = tx.hash
+          const amount = tx.in_msg.value ? (parseInt(tx.in_msg.value) / 1000000000).toString() : '0'
 
-              console.log(`Found deposit: ${depositComment}, hash: ${txHash}, amount: ${amount} TON`)
+          console.log(`Found deposit: ${depositComment}, hash: ${txHash}, amount: ${amount} TON`)
 
-              // Check if we already processed this transaction
-              const { data: existingDeposit } = await supabase
-                .from('deposits')
-                .select('id')
-                .eq('deposit_hash', txHash)
-                .single()
+          // Check if we already processed this transaction
+          const { data: existingDeposit } = await supabase
+            .from('deposits')
+            .select('id')
+            .eq('deposit_hash', txHash)
+            .single()
 
-              if (existingDeposit) {
-                console.log(`Deposit already processed: ${txHash}`)
-                continue
-              }
+          if (existingDeposit) {
+            console.log(`Deposit already processed: ${txHash}`)
+            continue
+          }
 
               // Process the deposit
               await processDeposit(depositComment, txHash, amount)
@@ -351,8 +348,8 @@ async function getBalance(params: URLSearchParams) {
   }
 
   try {
-    // Get TON balance using TON Hub API (more reliable)
-    const response = await fetch(`https://mainnet.tonhubapi.com/accounts/${walletAddress}`, {
+    // Get TON balance using TON Center API with API key
+    const response = await fetch(`https://toncenter.com/api/v2/getAddressInformation?address=${walletAddress}&api_key=5d06654f912fed525feb10c1608af9dcd8e06dc5aa2eb2927e2643b1965afa78`, {
       headers: {
         'Content-Type': 'application/json'
       }
@@ -365,7 +362,7 @@ async function getBalance(params: URLSearchParams) {
     const data = await response.json()
     console.log(`Balance API Response:`, data)
     
-    const tonBalance = data.balance ? (parseInt(data.balance) / 1000000000).toString() : '0'
+    const tonBalance = data.result && data.result.balance ? (parseInt(data.result.balance) / 1000000000).toString() : '0'
 
     // Get user's BIM/OBA balances from database
     const { data: user } = await supabase
