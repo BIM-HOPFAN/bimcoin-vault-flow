@@ -61,13 +61,12 @@ async function checkDeposits() {
   console.log('Checking for new deposits...')
 
   try {
-    // Get recent transactions to treasury using the correct API endpoint
-    const apiUrl = `https://toncenter.com/api/v3/transactions?account=${TREASURY_ADDRESS}&limit=20&sort_order=desc`
+    // Get recent transactions to treasury using TON API (public endpoint)
+    const apiUrl = `https://tonapi.io/v2/accounts/${TREASURY_ADDRESS}/events?limit=20`
     console.log(`Fetching transactions from: ${apiUrl}`)
     
     const response = await fetch(apiUrl, {
       headers: {
-        'X-API-Key': TON_CENTER_API_KEY || '',
         'Content-Type': 'application/json'
       }
     })
@@ -79,8 +78,8 @@ async function checkDeposits() {
     const data = await response.json()
     console.log(`API Response:`, data)
     
-    if (!data.transactions) {
-      console.log('No transactions found in response')
+    if (!data.events) {
+      console.log('No events found in response')
       return new Response(JSON.stringify({
         success: true,
         processed_deposits: 0,
@@ -92,105 +91,119 @@ async function checkDeposits() {
 
     let processedCount = 0
 
-    for (const tx of data.transactions) {
-      // Check for incoming messages with comments
-      if (tx.in_msg && tx.in_msg.msg_data && tx.in_msg.msg_data.text) {
-        const message = tx.in_msg.msg_data.text
-        
-        // Check if message contains deposit comment format
-        if (message && message.startsWith('BIM:DEPOSIT:')) {
-          const depositComment = message
-          const txHash = tx.hash
-          const amount = tx.in_msg.value ? (parseInt(tx.in_msg.value) / 1000000000).toString() : '0'
+    for (const event of data.events) {
+      // Check for incoming transactions with comments
+      if (event.actions && event.actions.length > 0) {
+        for (const action of event.actions) {
+          if (action.type === 'TonTransfer' && action.TonTransfer) {
+            const transfer = action.TonTransfer
+            const comment = transfer.comment
+            
+            // Check if message contains deposit comment format
+            if (comment && comment.startsWith('BIM:DEPOSIT:')) {
+              const depositComment = comment
+              const txHash = event.event_id
+              const amount = transfer.amount ? (parseInt(transfer.amount) / 1000000000).toString() : '0'
 
-          console.log(`Found deposit: ${depositComment}, hash: ${txHash}, amount: ${amount} TON`)
+              console.log(`Found deposit: ${depositComment}, hash: ${txHash}, amount: ${amount} TON`)
 
-          // Check if we already processed this transaction
-          const { data: existingDeposit } = await supabase
-            .from('deposits')
-            .select('id')
-            .eq('deposit_hash', txHash)
-            .single()
+              // Check if we already processed this transaction
+              const { data: existingDeposit } = await supabase
+                .from('deposits')
+                .select('id')
+                .eq('deposit_hash', txHash)
+                .single()
 
-          if (existingDeposit) {
-            console.log(`Deposit already processed: ${txHash}`)
-            continue
-          }
+              if (existingDeposit) {
+                console.log(`Deposit already processed: ${txHash}`)
+                continue
+              }
 
-          // Find pending deposit with this comment
-          const { data: pendingDeposit, error: depositError } = await supabase
-            .from('deposits')
-            .select('*, users(*)')
-            .eq('deposit_comment', depositComment)
-            .eq('status', 'pending')
-            .single()
-
-          if (depositError || !pendingDeposit) {
-            console.log(`No pending deposit found for comment: ${depositComment}`)
-            continue
-          }
-
-          // Verify amount matches (with some tolerance)
-          const expectedAmount = parseFloat(pendingDeposit.ton_amount)
-          const actualAmount = parseFloat(amount)
-          const tolerance = 0.001 // 0.001 TON tolerance
-
-          if (Math.abs(expectedAmount - actualAmount) > tolerance) {
-            console.log(`Amount mismatch: expected ${expectedAmount}, got ${actualAmount}`)
-            continue
-          }
-
-          // Update deposit status
-          const { error: updateError } = await supabase
-            .from('deposits')
-            .update({
-              deposit_hash: txHash,
-              status: 'confirmed',
-              processed_at: new Date().toISOString()
-            })
-            .eq('id', pendingDeposit.id)
-
-          if (updateError) {
-            console.error(`Failed to update deposit: ${updateError.message}`)
-            continue
-          }
-
-          // Trigger jetton minting process
-          try {
-            const mintResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/jetton-minter/mint`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${Deno.env.get('SUPABASE_ANON_KEY')}`
-              },
-              body: JSON.stringify({
-                user_wallet: pendingDeposit.users.wallet_address,
-                bim_amount: pendingDeposit.bim_amount,
-                deposit_id: pendingDeposit.id
-              })
-            })
-
-            if (!mintResponse.ok) {
-              console.error(`Jetton mint request failed: ${mintResponse.status}`)
-            } else {
-              console.log(`Jetton minting initiated for deposit ${pendingDeposit.id}`)
+              // Process the deposit
+              await processDeposit(depositComment, txHash, amount)
+              processedCount++
             }
-          } catch (mintError) {
-            console.error(`Jetton mint process error: ${mintError.message}`)
           }
-
-          processedCount++
         }
       }
     }
-
     return new Response(JSON.stringify({
       success: true,
       processed_deposits: processedCount,
-      checked_transactions: data.result.length
+      checked_transactions: data.events?.length || 0
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
+
+  } catch (error) {
+    console.error('Error checking deposits:', error)
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    })
+  }
+}
+
+async function processDeposit(depositComment: string, txHash: string, amount: string) {
+  try {
+    // Find pending deposit with this comment
+    const { data: pendingDeposit, error: depositError } = await supabase
+      .from('deposits')
+      .select('*, users(*)')
+      .eq('deposit_comment', depositComment)
+      .eq('status', 'pending')
+      .single()
+
+    if (depositError || !pendingDeposit) {
+      console.log(`No pending deposit found for comment: ${depositComment}`)
+      return
+    }
+
+    // Verify amount matches (with some tolerance)
+    const expectedAmount = parseFloat(pendingDeposit.ton_amount)
+    const actualAmount = parseFloat(amount)
+    const tolerance = 0.001 // 0.001 TON tolerance
+
+    if (Math.abs(expectedAmount - actualAmount) > tolerance) {
+      console.log(`Amount mismatch: expected ${expectedAmount}, got ${actualAmount}`)
+      return
+    }
+
+    // Update deposit status
+    const { error: updateError } = await supabase
+      .from('deposits')
+      .update({
+        deposit_hash: txHash,
+        status: 'confirmed',
+        processed_at: new Date().toISOString()
+      })
+      .eq('id', pendingDeposit.id)
+
+    if (updateError) {
+      console.error(`Failed to update deposit: ${updateError.message}`)
+      return
+    }
+
+    // Update user's BIM balance
+    const { error: userUpdateError } = await supabase
+      .from('users')
+      .update({
+        bim_balance: parseFloat(pendingDeposit.users.bim_balance) + parseFloat(pendingDeposit.bim_amount),
+        total_deposited: parseFloat(pendingDeposit.users.total_deposited) + parseFloat(pendingDeposit.ton_amount)
+      })
+      .eq('id', pendingDeposit.user_id)
+
+    if (userUpdateError) {
+      console.error(`Failed to update user balance: ${userUpdateError.message}`)
+      return
+    }
+
+    console.log(`Successfully processed deposit: ${depositComment} for ${amount} TON`)
+    
+  } catch (error) {
+    console.error(`Error processing deposit ${depositComment}:`, error)
+  }
+}
 
   } catch (error) {
     console.error('Error checking deposits:', error)
@@ -298,16 +311,15 @@ async function getBalance(params: URLSearchParams) {
   }
 
   try {
-    // Get TON balance using v3 API
-    const response = await fetch(`https://toncenter.com/api/v3/account?account=${walletAddress}`, {
+    // Get TON balance using TON API (public endpoint)
+    const response = await fetch(`https://tonapi.io/v2/accounts/${walletAddress}`, {
       headers: {
-        'X-API-Key': TON_CENTER_API_KEY || '',
         'Content-Type': 'application/json'
       }
     })
 
     if (!response.ok) {
-      throw new Error(`TON Center API error: ${response.status}`)
+      throw new Error(`TON API error: ${response.status}`)
     }
 
     const data = await response.json()
