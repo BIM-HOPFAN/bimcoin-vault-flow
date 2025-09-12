@@ -24,7 +24,9 @@ const JettonMinterManager = () => {
 
   const fetchMinterInfo = async () => {
     try {
-      const { data, error } = await supabase.functions.invoke('jetton-minter/minter-info');
+      const { data, error } = await supabase.functions.invoke('jetton-minter/minter-info', {
+        method: 'GET'
+      });
       
       if (error) throw error;
       
