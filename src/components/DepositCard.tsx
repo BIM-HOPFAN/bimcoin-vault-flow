@@ -46,25 +46,17 @@ const DepositCard = () => {
         throw new Error(intentResult.error);
       }
 
-      console.log('Creating transaction with:', {
-        treasury_address: intentResult.treasury_address,
-        deposit_comment: intentResult.deposit_comment,
-        amount: depositAmount
-      });
-
-      // Create transaction with the generated comment and treasury address
+      // Create transaction without payload - TON Connect will handle it as a simple transfer
       const transaction = {
         validUntil: Math.floor(Date.now() / 1000) + 300, // 5 minutes
         messages: [
           {
             address: intentResult.treasury_address,
             amount: (depositAmount * 1e9).toString(), // Convert to nanoTONs
-            payload: intentResult.deposit_comment, // Try raw string first
+            // Remove payload - simple transfer without comment for now
           },
         ],
       };
-
-      console.log('Transaction object:', transaction);
 
       await tonConnectUI.sendTransaction(transaction);
       
