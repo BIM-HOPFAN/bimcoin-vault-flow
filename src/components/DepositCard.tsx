@@ -48,12 +48,13 @@ const DepositCard = () => {
 
       // Create transaction with the generated comment and treasury address
       const transaction = {
-        validUntil: Math.floor(Date.now() / 1000) + 600, // 10 minutes
+        validUntil: Math.floor(Date.now() / 1000) + 300, // 5 minutes (max allowed)
         messages: [
           {
             address: intentResult.treasury_address,
             amount: (depositAmount * 1e9).toString(), // Convert to nanoTONs
-            payload: intentResult.deposit_comment, // Use the generated deposit comment
+            // Encode comment as base64 for TON Connect
+            payload: btoa(unescape(encodeURIComponent(intentResult.deposit_comment))),
           },
         ],
       };
