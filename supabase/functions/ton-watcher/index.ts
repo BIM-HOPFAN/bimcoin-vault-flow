@@ -79,18 +79,70 @@ async function checkDeposits() {
   // Only process deposits that have actual blockchain transaction evidence
 
   try {
-    // Get recent transactions to treasury using TON Center API with API key
-    const apiUrl = `https://toncenter.com/api/v2/getTransactions?address=${TREASURY_ADDRESS}&limit=20&api_key=${TON_CENTER_API_KEY}`
-    console.log(`Fetching transactions from: ${apiUrl}`)
+    let data = null
+    let apiUsed = 'toncenter'
     
-    const response = await fetch(apiUrl, {
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    })
+    // Try TON Center API first
+    try {
+      const apiUrl = `https://toncenter.com/api/v2/getTransactions?address=${TREASURY_ADDRESS}&limit=20&api_key=${TON_CENTER_API_KEY}`
+      console.log(`Fetching transactions from TON Center: ${apiUrl}`)
+      
+      const response = await fetch(apiUrl, {
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      })
 
-    if (!response.ok) {
-      throw new Error(`TON API error: ${response.status}`)
+      if (response.ok) {
+        data = await response.json()
+        console.log(`TON Center API Response:`, data)
+      } else {
+        throw new Error(`TON Center API error: ${response.status}`)
+      }
+    } catch (tonCenterError) {
+      console.log(`TON Center API failed: ${tonCenterError.message}`)
+      
+      // Fallback to TonAPI.io
+      try {
+        const fallbackUrl = `https://tonapi.io/v2/blockchain/accounts/${TREASURY_ADDRESS}/transactions?limit=20`
+        console.log(`Trying fallback API: ${fallbackUrl}`)
+        
+        const fallbackResponse = await fetch(fallbackUrl, {
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        })
+
+        if (fallbackResponse.ok) {
+          const tonApiData = await fallbackResponse.json()
+          // Convert TonAPI format to TON Center format
+          data = {
+            result: tonApiData.transactions?.map(tx => ({
+              hash: tx.hash,
+              in_msg: tx.in_msg ? {
+                message: tx.in_msg.decoded_body?.text || tx.in_msg.raw_body
+              } : null,
+              value: tx.in_msg?.value || '0'
+            })) || []
+          }
+          apiUsed = 'tonapi'
+          console.log(`TonAPI.io Response converted:`, data)
+        } else {
+          throw new Error(`TonAPI.io error: ${fallbackResponse.status}`)
+        }
+      } catch (tonApiError) {
+        console.log(`Both APIs failed. TON Center: ${tonCenterError.message}, TonAPI: ${tonApiError.message}`)
+        // Return success with no processed deposits rather than failing completely
+        return new Response(JSON.stringify({
+          success: true,
+          processed_deposits: 0,
+          checked_transactions: 0,
+          error: 'Both TON APIs unavailable',
+          apis_tried: ['toncenter', 'tonapi']
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        })
+      }
     }
 
     const data = await response.json()
@@ -143,7 +195,8 @@ async function checkDeposits() {
     return new Response(JSON.stringify({
       success: true,
       processed_deposits: processedCount,
-      checked_transactions: data.result?.length || 0
+      checked_transactions: data.result?.length || 0,
+      api_used: apiUsed
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
