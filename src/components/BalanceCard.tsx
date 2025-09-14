@@ -41,7 +41,7 @@ const BalanceCard = () => {
         }
       }
       
-      if (userProfile.success && userProfile.user) {
+      if (userProfile.user) {
         setUser(userProfile.user);
         console.log('User initialized:', userProfile.user);
       }
@@ -62,7 +62,7 @@ const BalanceCard = () => {
       console.log('Fetching user profile...');
       const userProfile = await bimCoinAPI.getUserProfile(address);
       
-      if (userProfile.success && userProfile.user) {
+      if (userProfile.user) {
         console.log('User profile data:', userProfile.user);
         setUser(userProfile.user);
         
