@@ -50,73 +50,61 @@ const BalanceCard = () => {
     }
   };
 
-  // Fetch real balances from API
+  // Fetch balances - always get BIM/OBA from user profile, optionally get TON from API
   const fetchBalances = async () => {
     if (!address) return;
     
     setLoading(true);
+    console.log('Fetching balances for address:', address);
+    
     try {
-      const balanceData = await bimCoinAPI.getBalance(address);
+      // Always fetch user profile first for BIM/OBA balances
+      console.log('Fetching user profile...');
+      const userProfile = await bimCoinAPI.getUserProfile(address);
       
-      if (balanceData.success) {
-        setBalances({
-          ton: parseFloat(balanceData.ton_balance || '0'),
-          bim: parseFloat(balanceData.bim_balance || '0'),
-          oba: parseFloat(balanceData.oba_balance || '0')
-        });
+      if (userProfile.success && userProfile.data) {
+        console.log('User profile data:', userProfile.data);
+        setUser(userProfile.data);
+        
+        // Set BIM/OBA balances from database
+        const newBalances = {
+          ton: 0, // Will try to get this separately
+          bim: parseFloat(userProfile.data.bim_balance || '0'),
+          oba: parseFloat(userProfile.data.oba_balance || '0')
+        };
+        
+        // Try to get TON balance from API
+        try {
+          console.log('Fetching TON balance...');
+          const balanceData = await bimCoinAPI.getBalance(address);
+          if (balanceData.success && balanceData.ton_balance) {
+            newBalances.ton = parseFloat(balanceData.ton_balance);
+            console.log('TON balance fetched:', newBalances.ton);
+          } else {
+            console.log('TON balance API failed, using 0');
+          }
+        } catch (tonError) {
+          console.log('TON balance fetch error:', tonError);
+        }
+        
+        setBalances(newBalances);
+        console.log('Final balances set:', newBalances);
+        
       } else {
-        // Fallback to user profile data if ton-watcher fails
-        console.log('TON balance service unavailable, using user profile data');
-        const userProfile = await bimCoinAPI.getUserProfile(address);
-        if (userProfile.success && userProfile.data) {
-          setBalances({
-            ton: 0, // TON balance not available
-            bim: parseFloat(userProfile.data.bim_balance || '0'),
-            oba: parseFloat(userProfile.data.oba_balance || '0')
-          });
-          setUser(userProfile.data);
-          toast({
-            title: "Partial balance data",
-            description: "TON balance unavailable, showing BIM/OBA balances",
-            variant: "default",
-          });
-        } else {
-          throw new Error('Failed to fetch any balance data');
-        }
-      }
-    } catch (error) {
-      console.error('Failed to fetch balances:', error);
-      
-      // Final fallback - try to get at least BIM/OBA from user profile
-      try {
-        const userProfile = await bimCoinAPI.getUserProfile(address);
-        if (userProfile.success && userProfile.data) {
-          setBalances({
-            ton: 0,
-            bim: parseFloat(userProfile.data.bim_balance || '0'),
-            oba: parseFloat(userProfile.data.oba_balance || '0')
-          });
-          setUser(userProfile.data);
-          toast({
-            title: "Partial balance data",
-            description: "TON balance unavailable, showing BIM/OBA from cache",
-            variant: "default",
-          });
-        } else {
-          toast({
-            title: "Failed to fetch balances",
-            description: "There was an error getting your wallet balances",
-            variant: "destructive",
-          });
-        }
-      } catch (fallbackError) {
-        console.error('Fallback balance fetch failed:', fallbackError);
+        console.error('Failed to fetch user profile:', userProfile);
         toast({
-          title: "Failed to fetch balances",
-          description: "There was an error getting your wallet balances",
+          title: "Failed to fetch profile",
+          description: "Could not load your account data",
           variant: "destructive",
         });
       }
+    } catch (error) {
+      console.error('Error in fetchBalances:', error);
+      toast({
+        title: "Failed to fetch balances",
+        description: "There was an error getting your wallet balances",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
