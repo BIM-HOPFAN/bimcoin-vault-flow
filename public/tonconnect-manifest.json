@@ -1,7 +1,7 @@
 {
-  "url": "https://id-preview--db23b08d-08a2-4e7e-b648-6f394e9e12c2.lovable.app",
+  "url": "https://bimcoin.app",
   "name": "BIMCoin",
-  "iconUrl": "https://id-preview--db23b08d-08a2-4e7e-b648-6f394e9e12c2.lovable.app/icon-512x512.png",
-  "termsOfUseUrl": "https://id-preview--db23b08d-08a2-4e7e-b648-6f394e9e12c2.lovable.app",
-  "privacyPolicyUrl": "https://id-preview--db23b08d-08a2-4e7e-b648-6f394e9e12c2.lovable.app"
+  "iconUrl": "/icon-512x512.png",
+  "termsOfUseUrl": "https://bimcoin.app",
+  "privacyPolicyUrl": "https://bimcoin.app"
 }
