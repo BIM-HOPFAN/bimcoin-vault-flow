@@ -41,9 +41,9 @@ const BalanceCard = () => {
         }
       }
       
-      if (userProfile.success) {
-        setUser(userProfile.data);
-        console.log('User initialized:', userProfile.data);
+      if (userProfile.success && userProfile.user) {
+        setUser(userProfile.user);
+        console.log('User initialized:', userProfile.user);
       }
     } catch (error) {
       console.error('Failed to initialize user:', error);
@@ -62,15 +62,15 @@ const BalanceCard = () => {
       console.log('Fetching user profile...');
       const userProfile = await bimCoinAPI.getUserProfile(address);
       
-      if (userProfile.success && userProfile.data) {
-        console.log('User profile data:', userProfile.data);
-        setUser(userProfile.data);
+      if (userProfile.success && userProfile.user) {
+        console.log('User profile data:', userProfile.user);
+        setUser(userProfile.user);
         
         // Set BIM/OBA balances from database
         const newBalances = {
           ton: 0, // Will try to get this separately
-          bim: parseFloat(userProfile.data.bim_balance || '0'),
-          oba: parseFloat(userProfile.data.oba_balance || '0')
+          bim: parseFloat(userProfile.user.bim_balance || '0'),
+          oba: parseFloat(userProfile.user.oba_balance || '0')
         };
         
         // Try to get TON balance from API
