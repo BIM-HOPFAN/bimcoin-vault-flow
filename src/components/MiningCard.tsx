@@ -168,9 +168,10 @@ const MiningCard = () => {
   };
 
   const formatTime = (seconds: number) => {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const secs = seconds % 60;
+    const totalSeconds = Math.floor(seconds);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const secs = totalSeconds % 60;
     return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
@@ -211,7 +212,7 @@ const MiningCard = () => {
               <span className="text-sm font-medium">Time Left</span>
             </div>
             <div className="text-lg font-bold">
-              {mining ? formatTime(timeRemaining) : "00:00:00"}
+              {mining && timeRemaining > 0 ? formatTime(timeRemaining) : "00:00:00"}
             </div>
           </div>
         </div>
