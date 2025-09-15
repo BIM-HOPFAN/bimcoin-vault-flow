@@ -12,7 +12,11 @@ interface Balances {
   oba: number;
 }
 
-const BalanceCard = () => {
+interface BalanceCardProps {
+  onBalancesUpdate?: (balances: { oba: number; bim: number }) => void;
+}
+
+const BalanceCard = ({ onBalancesUpdate }: BalanceCardProps) => {
   const [balances, setBalances] = useState<Balances>({ ton: 0, bim: 0, oba: 0 });
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState<any>(null);
@@ -89,6 +93,12 @@ const BalanceCard = () => {
         
         setBalances(newBalances);
         console.log('Final balances set:', newBalances);
+        
+        // Notify parent component of balance changes
+        onBalancesUpdate?.({
+          oba: newBalances.oba,
+          bim: newBalances.bim
+        });
         
       } else {
         console.error('Failed to fetch user profile:', userProfile);
