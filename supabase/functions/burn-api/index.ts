@@ -20,7 +20,7 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
     const url = new URL(req.url)
-    const path = url.pathname.replace('/functions/v1/burn-api', '')
+    const path = url.pathname.replace('/burn-api', '')
     
     console.log(`Parsed path: "${path}", Method: ${req.method}`)
 
