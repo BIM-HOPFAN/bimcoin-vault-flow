@@ -13,12 +13,16 @@ serve(async (req) => {
   }
 
   try {
+    console.log(`Burn API Request: ${req.method} ${req.url}`)
+    
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
     const url = new URL(req.url)
     const path = url.pathname.replace('/functions/v1/burn-api', '')
+    
+    console.log(`Parsed path: "${path}", Method: ${req.method}`)
 
     // Burn OBA for BIM
     if (req.method === 'POST' && path === '/burn-oba') {
