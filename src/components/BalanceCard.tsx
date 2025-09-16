@@ -20,6 +20,7 @@ const BalanceCard = ({ onBalancesUpdate }: BalanceCardProps) => {
   const [balances, setBalances] = useState<Balances>({ ton: 0, bim: 0, oba: 0 });
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState<any>(null);
+  const [tonPrice, setTonPrice] = useState(2.5); // Default to $2.5, will fetch real price
   const address = useTonAddress();
   const { toast } = useToast();
 
@@ -51,6 +52,21 @@ const BalanceCard = ({ onBalancesUpdate }: BalanceCardProps) => {
       }
     } catch (error) {
       console.error('Failed to initialize user:', error);
+    }
+  };
+
+  // Fetch real TON price from CoinGecko API
+  const fetchTonPrice = async () => {
+    try {
+      const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=the-open-network&vs_currencies=usd');
+      const data = await response.json();
+      const price = data['the-open-network']?.usd;
+      if (price) {
+        setTonPrice(price);
+        console.log('TON price fetched:', price);
+      }
+    } catch (error) {
+      console.log('Failed to fetch TON price, using default:', error);
     }
   };
 
@@ -157,6 +173,9 @@ const BalanceCard = ({ onBalancesUpdate }: BalanceCardProps) => {
   };
 
   useEffect(() => {
+    // Fetch TON price on component mount
+    fetchTonPrice();
+    
     if (address) {
       initializeUser(address);
       fetchBalances();
@@ -232,9 +251,9 @@ const BalanceCard = ({ onBalancesUpdate }: BalanceCardProps) => {
             </div>
           </div>
           <div className="text-2xl font-bold">
-            ${address ? ((balances.ton * 2.5) + (balances.bim * 0.0025) + (balances.oba * 0.1)).toFixed(2) : '0.00'}
+            ${address ? ((balances.ton * tonPrice) + (balances.bim * tonPrice * 0.005) + (balances.oba * tonPrice * 0.005 * 0.005)).toFixed(2) : '0.00'}
           </div>
-          <div className="text-sm text-muted-foreground">≈ {address ? (balances.ton + (balances.bim * 0.001) + (balances.oba * 0.04)).toFixed(2) : '0.00'} TON</div>
+          <div className="text-sm text-muted-foreground">≈ {address ? (balances.ton + (balances.bim * 0.005) + (balances.oba * 0.005 * 0.005)).toFixed(4) : '0.00'} TON</div>
         </div>
 
         <div className="flex gap-2">
