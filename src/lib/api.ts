@@ -42,11 +42,15 @@ export class BimCoinAPI {
   }
 
   // Deposit API
-  async createDepositIntent(walletAddress: string, tonAmount: number) {
+  async createDepositIntent(walletAddress: string, depositAmount: number, depositType: 'TON' | 'BIMCoin' = 'TON') {
     const response = await fetch(`${this.baseUrl}/deposit-api/create-intent`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ wallet_address: walletAddress, ton_amount: tonAmount })
+      body: JSON.stringify({ 
+        wallet_address: walletAddress, 
+        deposit_amount: depositAmount,
+        deposit_type: depositType
+      })
     })
     return await response.json()
   }

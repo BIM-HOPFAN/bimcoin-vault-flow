@@ -3,13 +3,33 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ArrowDownCircle, Coins } from 'lucide-react';
 import { useTonAddress, useTonConnectUI } from '@tonconnect/ui-react';
 import { useToast } from '@/hooks/use-toast';
 import { bimCoinAPI } from '@/lib/api';
-import { beginCell } from '@ton/core';
+import { beginCell, Address } from '@ton/core';
 
-// Helper function to create comment payload
+// Helper function to create jetton transfer payload
+const createJettonTransferPayload = (jettonWalletAddress: string, amount: bigint, destination: string, comment: string) => {
+  const destinationAddress = Address.parse(destination);
+  
+  const transferBody = beginCell()
+    .storeUint(0xf8a7ea5, 32) // jetton transfer op code
+    .storeUint(0, 64) // query id
+    .storeCoins(amount) // jetton amount
+    .storeAddress(destinationAddress) // destination
+    .storeAddress(destinationAddress) // response destination
+    .storeBit(0) // custom payload
+    .storeCoins(1) // forward ton amount
+    .storeBit(1) // forward payload
+    .storeRef(beginCell().storeUint(0, 32).storeStringTail(comment).endCell()) // comment
+    .endCell();
+
+  return transferBody.toBoc().toString('base64');
+};
+
+// Helper function to create comment payload for TON deposits
 const createCommentPayload = (comment: string) => {
   const cell = beginCell()
     .storeUint(0, 32) // op code for text comment
@@ -20,6 +40,7 @@ const createCommentPayload = (comment: string) => {
 
 const DepositCard = () => {
   const [amount, setAmount] = useState('');
+  const [depositType, setDepositType] = useState<'TON' | 'BIMCoin'>('TON');
   const [loading, setLoading] = useState(false);
   const address = useTonAddress();
   const [tonConnectUI] = useTonConnectUI();
@@ -38,7 +59,7 @@ const DepositCard = () => {
     if (!amount || parseFloat(amount) <= 0) {
       toast({
         title: "Invalid amount",
-        description: "Please enter a valid deposit amount",
+        description: `Please enter a valid ${depositType} amount`,
         variant: "destructive",
       });
       return;
@@ -50,23 +71,38 @@ const DepositCard = () => {
       
       // Register user if not exists and create deposit intent
       await bimCoinAPI.registerUser(address);
-      const intentResult = await bimCoinAPI.createDepositIntent(address, depositAmount);
+      const intentResult = await bimCoinAPI.createDepositIntent(address, depositAmount, depositType);
       
       if (intentResult.error) {
         throw new Error(intentResult.error);
       }
 
-      // Create transaction with proper BOC payload format
-      const transaction = {
-        validUntil: Math.floor(Date.now() / 1000) + 300, // 5 minutes
-        messages: [
-          {
-            address: intentResult.treasury_address,
-            amount: (depositAmount * 1e9).toString(), // Convert to nanoTONs
-            payload: createCommentPayload(intentResult.deposit_comment),
-          },
-        ],
-      };
+      let transaction;
+
+      if (depositType === 'TON') {
+        // Create TON transaction with comment payload
+        transaction = {
+          validUntil: Math.floor(Date.now() / 1000) + 300, // 5 minutes
+          messages: [
+            {
+              address: intentResult.treasury_address,
+              amount: (depositAmount * 1e9).toString(), // Convert to nanoTONs
+              payload: createCommentPayload(intentResult.deposit_comment),
+            },
+          ],
+        };
+      } else {
+        // Create BIMCoin jetton transfer transaction
+        // Note: This would require the user's jetton wallet address for BIMCoin
+        // For now, we'll show an info message about jetton transfers
+        toast({
+          title: "BIMCoin Deposit Instructions",
+          description: "Please send your BIMCoin tokens to the treasury address with the provided comment. Feature coming soon!",
+          variant: "default",
+        });
+        setLoading(false);
+        return;
+      }
 
       const txResult = await tonConnectUI.sendTransaction(transaction);
       
@@ -81,7 +117,7 @@ const DepositCard = () => {
       
       toast({
         title: "Deposit initiated",
-        description: `Depositing ${amount} TON. You will receive ${intentResult.bim_amount} BIM tokens.`,
+        description: `Depositing ${amount} ${depositType}. You will receive ${intentResult.bim_amount} BIM tokens.`,
         variant: "default",
       });
       
@@ -103,19 +139,32 @@ const DepositCard = () => {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <ArrowDownCircle className="w-5 h-5 text-primary" />
-          Deposit TON
+          Deposit {depositType}
         </CardTitle>
         <CardDescription>
-          Deposit TON to mint BIMCoin and start earning rewards
+          Deposit {depositType === 'TON' ? 'TON' : 'BIMCoin tokens'} to mint internal BIM and start earning rewards
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-2">
-          <Label htmlFor="deposit-amount">Amount (TON)</Label>
+          <Label htmlFor="deposit-type">Deposit Type</Label>
+          <Select value={depositType} onValueChange={(value: 'TON' | 'BIMCoin') => setDepositType(value)}>
+            <SelectTrigger className="bg-muted/50 border-border/50 focus:border-primary/50">
+              <SelectValue placeholder="Select deposit type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="TON">TON</SelectItem>
+              <SelectItem value="BIMCoin">BIMCoin</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="deposit-amount">Amount ({depositType})</Label>
           <Input
             id="deposit-amount"
             type="number"
-            placeholder="Enter TON amount"
+            placeholder={`Enter ${depositType} amount`}
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
             min="0"
@@ -126,7 +175,9 @@ const DepositCard = () => {
         
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Coins className="w-4 h-4" />
-          <span>Exchange Rate: 1 TON = 200 BIM</span>
+          <span>
+            {depositType === 'TON' ? '1 TON = 200 BIM' : '1 BIMCoin = 1 BIM'}
+          </span>
         </div>
 
         <Button 
@@ -134,7 +185,7 @@ const DepositCard = () => {
           disabled={!address || loading || !amount}
           className="w-full bg-gradient-primary hover:opacity-90 glow-primary"
         >
-          {loading ? "Processing..." : "Deposit TON"}
+          {loading ? "Processing..." : `Deposit ${depositType}`}
         </Button>
       </CardContent>
     </Card>
