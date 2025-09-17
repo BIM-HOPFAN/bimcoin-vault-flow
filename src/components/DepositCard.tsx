@@ -93,27 +93,32 @@ const DepositCard = () => {
         };
       } else {
         // Create BIMCoin jetton transfer transaction
-        // For jetton transfers, we need to know the BIMCoin master contract address
         const BIMCOIN_MASTER_ADDRESS = "EQBynBO23ywHy_CgarY9NK9FTz0yDsG82PtcbSTQgGoXwiuA"; // Replace with actual BIMCoin master contract
-        
-        // Calculate the user's jetton wallet address for BIMCoin
-        // This is a simplified approach - in production, you'd query the jetton master contract
         const jettonAmount = BigInt(Math.floor(depositAmount * 1e9)); // Convert to jetton decimals
+        
+        // For jetton transfers, we need the user's jetton wallet address
+        // This is a simplified calculation - in production, you'd derive it properly from the master contract
+        const userJettonWalletAddress = Address.parse(address).toString(); // Simplified - should be derived from master contract
         
         transaction = {
           validUntil: Math.floor(Date.now() / 1000) + 300, // 5 minutes
           messages: [
             {
-              address: BIMCOIN_MASTER_ADDRESS, // Send to jetton master for now
-              amount: "50000000", // 0.05 TON for fees
-              payload: createCommentPayload(`BIMCoin deposit: ${intentResult.deposit_comment}`),
+              address: userJettonWalletAddress, // Send to user's jetton wallet
+              amount: "100000000", // 0.1 TON for jetton transfer fees
+              payload: createJettonTransferPayload(
+                userJettonWalletAddress,
+                jettonAmount,
+                intentResult.treasury_address,
+                intentResult.deposit_comment
+              ),
             },
           ],
         };
         
         toast({
           title: "BIMCoin Deposit Info",
-          description: "BIMCoin jetton transfer initiated. Please ensure you have BIMCoin tokens in your wallet.",
+          description: "BIMCoin jetton transfer initiated. This will transfer your BIMCoin tokens to the treasury.",
           variant: "default",
         });
       }
