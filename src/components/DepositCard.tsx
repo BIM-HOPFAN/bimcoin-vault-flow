@@ -38,40 +38,17 @@ const createCommentPayload = (comment: string) => {
   return cell.toBoc().toString('base64');
 };
 
-// Helper function to derive jetton wallet address
-const deriveJettonWalletAddress = (ownerAddress: string, jettonMasterAddress: string): string => {
+// Helper function to derive jetton wallet address using API
+const deriveJettonWalletAddress = async (ownerAddress: string, jettonMasterAddress: string): Promise<string> => {
   try {
-    const owner = Address.parse(ownerAddress);
-    const jettonMaster = Address.parse(jettonMasterAddress);
-    
-    const stateInit = beginCell()
-      .storeUint(0, 2) // split_depth:(Maybe (## 5)) special:(Maybe TickTock)
-      .storeBit(1) // (Maybe ^Cell) -> Just
-      .storeRef(
-        beginCell() // code
-          .storeUint(0xFFFF, 16) // Jetton wallet code placeholder
-          .endCell()
-      )
-      .storeBit(1) // (Maybe ^Cell) -> Just  
-      .storeRef(
-        beginCell() // data
-          .storeCoins(0) // balance
-          .storeAddress(owner) // owner_address
-          .storeAddress(jettonMaster) // jetton_master_address
-          .storeRef(beginCell().endCell()) // jetton_wallet_code
-          .endCell()
-      )
-      .storeBit(0) // (Maybe ^Cell) -> Nothing
-      .endCell();
-    
-    // Calculate address from state init
-    const hash = stateInit.hash();
-    const addr = new Address(0, hash);
-    return addr.toString();
+    const result = await bimCoinAPI.deriveJettonWallet(ownerAddress, jettonMasterAddress);
+    if (result.jetton_wallet_address) {
+      return result.jetton_wallet_address;
+    }
+    throw new Error(result.error || 'Failed to derive jetton wallet address');
   } catch (error) {
     console.error('Failed to derive jetton wallet address:', error);
-    // Fallback to a simplified approach - this would need to be implemented properly in production
-    return ownerAddress;
+    throw error;
   }
 };
 
@@ -140,29 +117,42 @@ const DepositCard = () => {
           return;
         }
 
-        // Derive the user's jetton wallet address
-        const userJettonWallet = deriveJettonWalletAddress(address, intentResult.minter_address);
-        
-        // Derive the treasury's jetton wallet address  
-        const treasuryJettonWallet = deriveJettonWalletAddress(intentResult.treasury_address, intentResult.minter_address);
-        
-        const jettonAmount = BigInt(Math.floor(depositAmount * 1e9)); // Convert to jetton decimals (9)
-        
-        transaction = {
-          validUntil: Math.floor(Date.now() / 1000) + 300, // 5 minutes
-          messages: [
-            {
-              address: userJettonWallet, // Send to user's jetton wallet
-              amount: "100000000", // 0.1 TON for jetton transfer fees
-              payload: createJettonTransferPayload(
-                userJettonWallet,
-                jettonAmount,
-                treasuryJettonWallet, // Send to treasury's jetton wallet
-                intentResult.deposit_comment
-              ),
-            },
-          ],
-        };
+        try {
+          // Derive the user's jetton wallet address
+          const userJettonWallet = await deriveJettonWalletAddress(address, intentResult.minter_address);
+          
+          // Derive the treasury's jetton wallet address  
+          const treasuryJettonWallet = await deriveJettonWalletAddress(intentResult.treasury_address, intentResult.minter_address);
+          
+          console.log(`User jetton wallet: ${userJettonWallet}`);
+          console.log(`Treasury jetton wallet: ${treasuryJettonWallet}`);
+          
+          const jettonAmount = BigInt(Math.floor(depositAmount * 1e9)); // Convert to jetton decimals (9)
+          
+          transaction = {
+            validUntil: Math.floor(Date.now() / 1000) + 300, // 5 minutes
+            messages: [
+              {
+                address: userJettonWallet, // Send to user's jetton wallet
+                amount: "100000000", // 0.1 TON for jetton transfer fees
+                payload: createJettonTransferPayload(
+                  userJettonWallet,
+                  jettonAmount,
+                  treasuryJettonWallet, // Send to treasury's jetton wallet
+                  intentResult.deposit_comment
+                ),
+              },
+            ],
+          };
+        } catch (error) {
+          toast({
+            title: "Failed to Prepare BIMCoin Transfer",
+            description: "Could not derive jetton wallet addresses. Please try again.",
+            variant: "destructive",
+          });
+          setLoading(false);
+          return;
+        }
       }
 
       const txResult = await tonConnectUI.sendTransaction(transaction);

@@ -147,6 +147,19 @@ export class BimCoinAPI {
     return await response.json()
   }
 
+  // Jetton Wallet API
+  async deriveJettonWallet(ownerAddress: string, jettonMasterAddress: string) {
+    const response = await fetch(`${this.baseUrl}/jetton-wallet-api/derive-wallet`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        owner_address: ownerAddress,
+        jetton_master_address: jettonMasterAddress
+      })
+    });
+    return response.json();
+  }
+
   // Burn API
   async burnOBA(walletAddress: string, obaAmount: number) {
     const response = await fetch(`${this.baseUrl}/burn-api/burn-oba`, {
