@@ -139,8 +139,8 @@ async function createDepositIntent(req: Request) {
   // Get treasury address from config
   const treasuryAddress = Deno.env.get('TREASURY_ADDRESS')
 
-  // Get minter address for BIMCoin deposits
-  const minterAddress = deposit_type === 'BIMCoin' ? Deno.env.get('MINTER_ADDRESS') : null;
+  // Get minter address for BIMCoin deposits  
+  const minterAddress = deposit_type === 'BIMCoin' ? (Deno.env.get('MINTER_ADDRESS') || await getMinterAddressFromConfig()) : null;
 
   return new Response(JSON.stringify({
     deposit_id: deposit.id,
@@ -340,4 +340,20 @@ async function getDepositStatus(params: URLSearchParams) {
   return new Response(JSON.stringify({ deposit }), {
     headers: { ...corsHeaders, 'Content-Type': 'application/json' }
   })
+}
+
+// Helper function to get minter address from config
+async function getMinterAddressFromConfig() {
+  try {
+    const { data: config } = await supabase
+      .from('config')
+      .select('value')
+      .eq('key', 'jetton_minter_address')
+      .single()
+    
+    return config?.value || null
+  } catch (error) {
+    console.error('Error getting minter address from config:', error)
+    return null
+  }
 }
