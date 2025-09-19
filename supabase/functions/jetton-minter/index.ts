@@ -142,14 +142,21 @@ async function mintTokens(req: Request) {
       throw new Error('Admin mnemonic not configured')
     }
 
-    // Get minter address from config
-    const { data: minterConfig } = await supabase
-      .from('config')
-      .select('value')
-      .eq('key', 'jetton_minter_address')
-      .single()
-
-    const minterAddress = minterConfig?.value || MINTER_ADDRESS
+    // Use environment variable first (real minter address), fallback to config
+    const minterAddress = MINTER_ADDRESS
+    
+    if (!minterAddress) {
+      const { data: minterConfig } = await supabase
+        .from('config')
+        .select('value')
+        .eq('key', 'jetton_minter_address')
+        .single()
+      
+      const configAddress = minterConfig?.value
+      if (!configAddress) {
+        throw new Error('Jetton minter address not configured')
+      }
+    }
 
     if (!minterAddress) {
       throw new Error('Jetton minter address not configured')
@@ -239,19 +246,32 @@ async function mintTokens(req: Request) {
 
 async function getMinterInfo() {
   try {
-    // Get minter address from config
-    const { data: minterConfig } = await supabase
-      .from('config')
-      .select('value')
-      .eq('key', 'jetton_minter_address')
-      .single()
-
-    const minterAddress = minterConfig?.value || MINTER_ADDRESS
+    // Use environment variable first (real minter address), fallback to config
+    const minterAddress = MINTER_ADDRESS
+    
+    if (!minterAddress) {
+      // Try config as fallback
+      const { data: minterConfig } = await supabase
+        .from('config')
+        .select('value')
+        .eq('key', 'jetton_minter_address')
+        .single()
+      
+      const configAddress = minterConfig?.value
+      
+      return new Response(JSON.stringify({
+        minter_address: configAddress,
+        status: configAddress ? 'configured' : 'not_configured',
+        message: configAddress ? 'Jetton minter is ready' : 'Jetton minter needs to be deployed'
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
+    }
 
     return new Response(JSON.stringify({
       minter_address: minterAddress,
-      status: minterAddress ? 'configured' : 'not_configured',
-      message: minterAddress ? 'Jetton minter is ready' : 'Jetton minter needs to be deployed'
+      status: 'configured',
+      message: 'Jetton minter is ready'
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
@@ -262,6 +282,7 @@ async function getMinterInfo() {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
+  }
 }
 
 async function reprocessDeposit(req: Request) {
