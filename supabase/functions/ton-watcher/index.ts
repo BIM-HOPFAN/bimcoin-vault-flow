@@ -461,8 +461,8 @@ async function getBalance(params: URLSearchParams) {
           console.log('TonAPI jetton balance response:', jettonBalanceData)
           
           if (jettonBalanceData.balance) {
-            // Balance is already in correct jetton format
-            realBimcoinBalance = jettonBalanceData.balance.toString()
+            // Convert from nano-jettons to jettons (divide by 1,000,000,000)
+            realBimcoinBalance = (parseInt(jettonBalanceData.balance) / 1000000000).toString()
             console.log(`Real Bimcoin balance: ${realBimcoinBalance}`)
           }
         } else {
@@ -475,7 +475,7 @@ async function getBalance(params: URLSearchParams) {
             console.log('TON Center jetton balance response:', tonCenterData)
             
             if (tonCenterData.ok && tonCenterData.result && tonCenterData.result.balance) {
-              realBimcoinBalance = tonCenterData.result.balance.toString()
+              realBimcoinBalance = (parseInt(tonCenterData.result.balance) / 1000000000).toString()
               console.log(`Real Bimcoin balance from TON Center: ${realBimcoinBalance}`)
             }
           }
