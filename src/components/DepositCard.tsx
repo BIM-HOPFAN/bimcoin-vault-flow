@@ -11,17 +11,17 @@ import { bimCoinAPI } from '@/lib/api';
 import { beginCell, Address } from '@ton/core';
 
 // Helper function to create jetton transfer payload
-const createJettonTransferPayload = (jettonWalletAddress: string, amount: bigint, destination: string, comment: string) => {
+const createJettonTransferPayload = (amount: bigint, destination: string, comment: string) => {
   const destinationAddress = Address.parse(destination);
   
   const transferBody = beginCell()
     .storeUint(0xf8a7ea5, 32) // jetton transfer op code
     .storeUint(0, 64) // query id
     .storeCoins(amount) // jetton amount
-    .storeAddress(destinationAddress) // destination
-    .storeAddress(destinationAddress) // response destination
+    .storeAddress(destinationAddress) // destination (treasury jetton wallet)
+    .storeAddress(Address.parse("UQCv2zOQoWzM8HI5jnNs8KJQngGNHfwnJ4n7DH8gT3wAt_Yk")) // response destination (user wallet)
     .storeBit(0) // custom payload
-    .storeCoins(1) // forward ton amount
+    .storeCoins(100000000n) // forward ton amount (0.1 TON)
     .storeBit(1) // forward payload
     .storeRef(beginCell().storeUint(0, 32).storeStringTail(comment).endCell()) // comment
     .endCell();
@@ -136,7 +136,6 @@ const DepositCard = () => {
                 address: userJettonWallet, // Send to user's jetton wallet
                 amount: "100000000", // 0.1 TON for jetton transfer fees
                 payload: createJettonTransferPayload(
-                  userJettonWallet,
                   jettonAmount,
                   treasuryJettonWallet, // Send to treasury's jetton wallet
                   intentResult.deposit_comment
