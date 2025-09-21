@@ -179,11 +179,27 @@ serve(async (req) => {
       }
 
       try {
-        // Initialize TON client and treasury wallet
-        const client = new TonClient({
-          endpoint: 'https://toncenter.com/api/v2/jsonRPC',
-          apiKey: Deno.env.get('TON_CENTER_API_KEY')
-        })
+        // Initialize TON client with multiple endpoints for reliability
+        let client
+        let endpoint
+        const tonCenterKey = Deno.env.get('TON_CENTER_API_KEY')
+        
+        // Try TON Center first, fallback to TonHub
+        try {
+          endpoint = 'https://toncenter.com/api/v2/jsonRPC'
+          client = new TonClient({
+            endpoint: endpoint,
+            apiKey: tonCenterKey
+          })
+        } catch (tonCenterError) {
+          console.log('TON Center failed, trying TonHub:', tonCenterError)
+          endpoint = 'https://mainnet-v4.tonhubapi.com'
+          client = new TonClient({
+            endpoint: endpoint
+          })
+        }
+
+        console.log(`Using TON endpoint: ${endpoint}`)
 
         const adminMnemonic = Deno.env.get('ADMIN_MNEMONIC')
         if (!adminMnemonic) {
@@ -194,13 +210,28 @@ serve(async (req) => {
         const wallet = WalletContractV4.create({ workchain: 0, publicKey: keyPair.publicKey })
         const contract = client.open(wallet)
 
+        // Check wallet balance first
+        try {
+          const balance = await contract.getBalance()
+          const balanceInTon = Number(balance) / 1_000_000_000
+          console.log(`Treasury wallet balance: ${balanceInTon} TON`)
+          
+          if (balanceInTon < ton_amount + 0.01) { // Need extra for fees
+            throw new Error(`Insufficient treasury balance: ${balanceInTon} TON, required: ${ton_amount + 0.01} TON`)
+          }
+        } catch (balanceError) {
+          console.error('Failed to check treasury balance:', balanceError)
+          throw new Error('Unable to verify treasury wallet state')
+        }
+
         // Convert TON amount to nanotons (1 TON = 1,000,000,000 nanotons)
         const nanotons = BigInt(Math.floor(ton_amount * 1_000_000_000))
 
         console.log(`Preparing to send ${ton_amount} TON (${nanotons} nanotons) to ${wallet_address}`)
 
-        // Create and send the transaction
+        // Get sequence number and send transaction
         const seqno = await contract.getSeqno()
+        console.log(`Current treasury seqno: ${seqno}`)
         
         await contract.sendTransfer({
           secretKey: keyPair.secretKey,
@@ -215,15 +246,17 @@ serve(async (req) => {
           ],
         })
 
-        // Wait for transaction confirmation
+        // Wait for transaction confirmation with better error handling
         let currentSeqno = seqno
         let attempts = 0
         const maxAttempts = 30
 
+        console.log('Waiting for transaction confirmation...')
         while (currentSeqno === seqno && attempts < maxAttempts) {
           await new Promise(resolve => setTimeout(resolve, 2000))
           try {
             currentSeqno = await contract.getSeqno()
+            console.log(`Seqno check ${attempts + 1}: ${currentSeqno} (expecting > ${seqno})`)
           } catch (error) {
             console.log(`Seqno check attempt ${attempts + 1} failed:`, error)
           }
@@ -231,13 +264,13 @@ serve(async (req) => {
         }
 
         if (currentSeqno === seqno) {
-          throw new Error('Transaction not confirmed within timeout period')
+          throw new Error('Transaction not confirmed within timeout period - TON transfer may have failed')
         }
 
         const ton_payout_hash = `confirmed_${seqno}_${Date.now()}`
         console.log(`TON transfer confirmed! Seqno: ${seqno} -> ${currentSeqno}`)
 
-        // Start transaction by updating user balances
+        // Now update user balances (only after successful TON transfer)
         const { error: updateError } = await supabase
           .from('users')
           .update({
@@ -268,16 +301,8 @@ serve(async (req) => {
 
         if (burnError) {
           console.error('Burn record error:', burnError)
-          // Rollback user balance update
-          await supabase
-            .from('users')
-            .update({
-              bim_balance: user.bim_balance,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', user.id)
-          
-          throw new Error('Failed to record burn transaction')
+          // Note: We don't rollback BIM here since TON was already sent
+          console.error('CRITICAL: TON sent but failed to record transaction in database')
         }
 
         console.log(`BIM burn successful: ${bim_amount} BIM → ${ton_amount} TON for user ${wallet_address}`)
@@ -285,7 +310,7 @@ serve(async (req) => {
         return new Response(
           JSON.stringify({
             success: true,
-            burn_id: burnRecord.id,
+            burn_id: burnRecord?.id || 'unknown',
             bim_burned: bim_amount,
             ton_received: ton_amount,
             ton_payout_hash: ton_payout_hash,
@@ -295,9 +320,24 @@ serve(async (req) => {
         )
 
       } catch (error) {
-        console.error('Transaction error:', error)
+        console.error('BIM burn transaction error:', error)
+        
+        // Return more specific error message
+        let errorMessage = 'Failed to process burn transaction'
+        if (error.message.includes('Insufficient treasury balance')) {
+          errorMessage = 'Treasury wallet has insufficient balance'
+        } else if (error.message.includes('ADMIN_MNEMONIC not configured')) {
+          errorMessage = 'Treasury wallet not configured'
+        } else if (error.message.includes('Transaction not confirmed')) {
+          errorMessage = 'TON network transaction failed - your BIM was not deducted'
+        }
+
         return new Response(
-          JSON.stringify({ success: false, error: 'Failed to process burn transaction' }),
+          JSON.stringify({ 
+            success: false, 
+            error: errorMessage,
+            details: error.message 
+          }),
           { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
       }
