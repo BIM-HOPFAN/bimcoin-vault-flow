@@ -23,21 +23,38 @@ const JettonMinterManager = () => {
   }, []);
 
   const fetchMinterInfo = async () => {
+    setLoading(true);
     try {
+      console.log('Fetching minter info...');
       const { data, error } = await supabase.functions.invoke('jetton-minter/minter-info', {
         method: 'GET'
       });
       
-      if (error) throw error;
+      console.log('Minter info response:', { data, error });
+      
+      if (error) {
+        console.error('Supabase function error:', error);
+        throw error;
+      }
       
       setMinterInfo(data);
     } catch (error) {
       console.error('Failed to fetch minter info:', error);
+      
+      // Set fallback info to show the deploy button
+      setMinterInfo({
+        minter_address: null,
+        status: 'not_configured',
+        message: 'Unable to connect to minter service. You can try deploying a new minter.'
+      });
+      
       toast({
-        title: "Error",
-        description: "Failed to fetch jetton minter information",
+        title: "Connection Error",
+        description: "Failed to fetch jetton minter information. Showing fallback options.",
         variant: "destructive",
       });
+    } finally {
+      setLoading(false);
     }
   };
 
