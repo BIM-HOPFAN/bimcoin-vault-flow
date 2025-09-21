@@ -42,11 +42,15 @@ export class BimCoinAPI {
   }
 
   // Deposit API
-  async createDepositIntent(walletAddress: string, tonAmount: number) {
+  async createDepositIntent(walletAddress: string, depositAmount: number, depositType: 'TON' | 'BIMCoin' = 'TON') {
     const response = await fetch(`${this.baseUrl}/deposit-api/create-intent`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ wallet_address: walletAddress, ton_amount: tonAmount })
+      body: JSON.stringify({ 
+        wallet_address: walletAddress, 
+        deposit_amount: depositAmount,
+        deposit_type: depositType
+      })
     })
     return await response.json()
   }
@@ -115,8 +119,24 @@ export class BimCoinAPI {
 
   // TON Watcher API
   async getBalance(walletAddress: string) {
-    const response = await fetch(`${this.baseUrl}/ton-watcher/balance?wallet_address=${walletAddress}`)
-    return await response.json()
+    try {
+      const response = await fetch(`${this.baseUrl}/ton-watcher/balance?wallet_address=${walletAddress}`)
+      const data = await response.json()
+      
+      if (!response.ok) {
+        return { success: false, error: data.error || 'Failed to fetch balance' }
+      }
+      
+      return { 
+        success: true, 
+        ton_balance: data.ton_balance,
+        bim_balance: data.bim_balance,
+        oba_balance: data.oba_balance
+      }
+    } catch (error) {
+      console.error('Balance API error:', error)
+      return { success: false, error: 'Network error' }
+    }
   }
 
   async checkDeposits() {
@@ -124,6 +144,34 @@ export class BimCoinAPI {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' }
     })
+    return await response.json()
+  }
+
+  // Jetton Wallet API
+  async deriveJettonWallet(ownerAddress: string, jettonMasterAddress: string) {
+    const response = await fetch(`${this.baseUrl}/jetton-wallet-api/derive-wallet`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        owner_address: ownerAddress,
+        jetton_master_address: jettonMasterAddress
+      })
+    });
+    return response.json();
+  }
+
+  // Burn API
+  async burnOBA(walletAddress: string, obaAmount: number) {
+    const response = await fetch(`${this.baseUrl}/burn-api/burn-oba`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ wallet_address: walletAddress, oba_amount: obaAmount })
+    })
+    return await response.json()
+  }
+
+  async getBurnHistory(walletAddress: string, limit = 10) {
+    const response = await fetch(`${this.baseUrl}/burn-api/history?wallet_address=${walletAddress}&limit=${limit}`)
     return await response.json()
   }
 }

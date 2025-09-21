@@ -54,10 +54,17 @@ Deno.serve(async (req) => {
 })
 
 async function createDepositIntent(req: Request) {
-  const { wallet_address, ton_amount } = await req.json()
+  const { wallet_address, deposit_amount, deposit_type = 'TON' } = await req.json()
 
-  if (!wallet_address || !ton_amount) {
-    return new Response(JSON.stringify({ error: 'Wallet address and TON amount required' }), {
+  if (!wallet_address || !deposit_amount) {
+    return new Response(JSON.stringify({ error: 'Wallet address and deposit amount required' }), {
+      status: 400,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    })
+  }
+
+  if (!['TON', 'BIMCoin'].includes(deposit_type)) {
+    return new Response(JSON.stringify({ error: 'Invalid deposit type. Must be TON or BIMCoin' }), {
       status: 400,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
@@ -84,17 +91,30 @@ async function createDepositIntent(req: Request) {
     throw userError
   }
 
-  // Get BIM per TON rate from config
-  const { data: config, error: configError } = await supabase
-    .from('config')
-    .select('value')
-    .eq('key', 'bim_per_ton')
-    .single()
+  // Get exchange rate based on deposit type
+  let bimAmount;
+  if (deposit_type === 'TON') {
+    const { data: config, error: configError } = await supabase
+      .from('config')
+      .select('value')
+      .eq('key', 'bim_per_ton')
+      .single()
 
-  if (configError) throw configError
+    if (configError) throw configError
+    const bimPerTon = parseFloat(config.value)
+    bimAmount = parseFloat(deposit_amount) * bimPerTon
+  } else {
+    // BIMCoin deposits: 1 BIMCoin = 1 internal BIM
+    const { data: config, error: configError } = await supabase
+      .from('config')
+      .select('value')
+      .eq('key', 'bim_per_bimcoin')
+      .single()
 
-  const bimPerTon = parseFloat(config.value)
-  const bimAmount = parseFloat(ton_amount) * bimPerTon
+    if (configError) throw configError
+    const bimPerBimcoin = parseFloat(config.value)
+    bimAmount = parseFloat(deposit_amount) * bimPerBimcoin
+  }
 
   // Generate deposit comment
   const depositId = crypto.randomUUID()
@@ -105,9 +125,10 @@ async function createDepositIntent(req: Request) {
     .from('deposits')
     .insert({
       user_id: user.id,
-      ton_amount: ton_amount.toString(),
+      ton_amount: deposit_type === 'TON' ? deposit_amount.toString() : '0',
       bim_amount: bimAmount.toString(),
       deposit_comment: depositComment,
+      deposit_type: deposit_type,
       status: 'pending'
     })
     .select()
@@ -118,10 +139,15 @@ async function createDepositIntent(req: Request) {
   // Get treasury address from config
   const treasuryAddress = Deno.env.get('TREASURY_ADDRESS')
 
+  // Get minter address for BIMCoin deposits  
+  const minterAddress = deposit_type === 'BIMCoin' ? (Deno.env.get('MINTER_ADDRESS') || await getMinterAddressFromConfig()) : null;
+
   return new Response(JSON.stringify({
     deposit_id: deposit.id,
     treasury_address: treasuryAddress,
-    ton_amount: ton_amount,
+    minter_address: minterAddress,
+    deposit_amount: deposit_amount,
+    deposit_type: deposit_type,
     bim_amount: bimAmount,
     deposit_comment: depositComment,
     expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString() // 10 minutes
@@ -169,11 +195,12 @@ async function processDeposit(req: Request) {
     if (updateError) throw updateError
 
     // Update user balances and stats
+    const depositAmount = deposit.deposit_type === 'TON' ? parseFloat(deposit.ton_amount) : 0;
     const { error: userUpdateError } = await supabase
       .from('users')
       .update({
         bim_balance: (parseFloat(deposit.users.bim_balance) + parseFloat(deposit.bim_amount)).toString(),
-        total_deposited: (parseFloat(deposit.users.total_deposited) + parseFloat(deposit.ton_amount)).toString(),
+        total_deposited: (parseFloat(deposit.users.total_deposited) + depositAmount).toString(),
         last_activity_at: new Date().toISOString()
       })
       .eq('id', deposit.user_id)
@@ -313,4 +340,20 @@ async function getDepositStatus(params: URLSearchParams) {
   return new Response(JSON.stringify({ deposit }), {
     headers: { ...corsHeaders, 'Content-Type': 'application/json' }
   })
+}
+
+// Helper function to get minter address from config
+async function getMinterAddressFromConfig() {
+  try {
+    const { data: config } = await supabase
+      .from('config')
+      .select('value')
+      .eq('key', 'jetton_minter_address')
+      .single()
+    
+    return config?.value || null
+  } catch (error) {
+    console.error('Error getting minter address from config:', error)
+    return null
+  }
 }

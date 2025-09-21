@@ -85,6 +85,7 @@ export type Database = {
           created_at: string | null
           deposit_comment: string
           deposit_hash: string | null
+          deposit_type: string
           id: string
           jetton_mint_hash: string | null
           oba_reward: number | null
@@ -99,6 +100,7 @@ export type Database = {
           created_at?: string | null
           deposit_comment: string
           deposit_hash?: string | null
+          deposit_type?: string
           id?: string
           jetton_mint_hash?: string | null
           oba_reward?: number | null
@@ -113,6 +115,7 @@ export type Database = {
           created_at?: string | null
           deposit_comment?: string
           deposit_hash?: string | null
+          deposit_type?: string
           id?: string
           jetton_mint_hash?: string | null
           oba_reward?: number | null
