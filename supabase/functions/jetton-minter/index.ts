@@ -11,7 +11,8 @@ import {
   Address, 
   internal, 
   SendMode,
-  toNano 
+  toNano,
+  Dictionary 
 } from 'https://esm.sh/@ton/core@0.59.0'
 import { mnemonicToWalletKey } from 'https://esm.sh/@ton/crypto@3.3.0'
 import { TonClient } from 'https://esm.sh/@ton/ton@15.3.1'
@@ -79,13 +80,18 @@ async function deployJettonMinter() {
       throw new Error('Admin mnemonic not configured')
     }
 
-    // Create jetton minter content
+    // Create jetton content using simple onchain format
+    const nameCell = beginCell().storeUint(0, 8).storeStringTail('Bimcoin').endCell()
+    const symbolCell = beginCell().storeUint(0, 8).storeStringTail('BIM').endCell()
+    const decimalsCell = beginCell().storeUint(0, 8).storeStringTail('9').endCell()
+    const imageCell = beginCell().storeUint(0, 8).storeStringTail('https://db23b08d-08a2-4e7e-b648-6f394e9e12c2.lovableproject.com/icon-512x512.png').endCell()
+    
     const jettonContent = beginCell()
       .storeUint(0, 8) // onchain content flag
-      .storeStringTail('BIMCoin') // name
-      .storeStringTail('BIM') // symbol  
-      .storeStringTail('BIMCoin - The future of decentralized rewards') // description
-      .storeStringTail('https://id-preview--db23b08d-08a2-4e7e-b648-6f394e9e12c2.lovable.app/icon-512x512.png') // image
+      .storeRef(nameCell)
+      .storeRef(symbolCell) 
+      .storeRef(decimalsCell)
+      .storeRef(imageCell)
       .endCell()
 
     // Create jetton minter init data
