@@ -19,7 +19,7 @@ const HeroSection = () => {
 
         <h1 className="text-5xl md:text-7xl font-bold mb-6 leading-tight">
           Earn with{' '}
-          <span className="gradient-text bg-gradient-primary">BIMCoin</span>
+          <span className="gradient-text bg-gradient-primary">Bimcoin</span>
           <br />
           on TON Network
         </h1>

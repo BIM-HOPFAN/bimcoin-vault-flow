@@ -39,7 +39,7 @@ const Index = () => {
             <div className="w-8 h-8 rounded-lg bg-gradient-primary flex items-center justify-center">
               <span className="text-sm font-bold text-primary-foreground">B</span>
             </div>
-            <span className="text-xl font-bold gradient-text">BIMCoin</span>
+            <span className="text-xl font-bold gradient-text">Bimcoin</span>
           </div>
           
           <WalletConnectButton />
@@ -54,7 +54,7 @@ const Index = () => {
         <section className="py-16 px-4">
           <div className="max-w-7xl mx-auto">
             <div className="text-center mb-12">
-              <h2 className="text-3xl font-bold mb-4">Your BIMCoin Dashboard</h2>
+              <h2 className="text-3xl font-bold mb-4">Your Bimcoin Dashboard</h2>
               <p className="text-muted-foreground max-w-2xl mx-auto">
                 Manage your deposits, track mining progress, complete tasks, and grow your portfolio
               </p>
@@ -156,7 +156,7 @@ const Index = () => {
       {/* Footer */}
       <footer className="border-t border-border/50 py-8">
         <div className="max-w-7xl mx-auto px-4 text-center text-sm text-muted-foreground">
-          <p>© 2024 BIMCoin. Built on The Open Network (TON)</p>
+          <p>© 2024 Bimcoin. Built on The Open Network (TON)</p>
         </div>
       </footer>
     </div>

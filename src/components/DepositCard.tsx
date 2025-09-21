@@ -54,7 +54,7 @@ const deriveJettonWalletAddress = async (ownerAddress: string, jettonMasterAddre
 
 const DepositCard = () => {
   const [amount, setAmount] = useState('');
-  const [depositType, setDepositType] = useState<'TON' | 'BIMCoin'>('TON');
+  const [depositType, setDepositType] = useState<'TON' | 'Bimcoin'>('TON');
   const [loading, setLoading] = useState(false);
   const address = useTonAddress();
   const [tonConnectUI] = useTonConnectUI();
@@ -106,11 +106,11 @@ const DepositCard = () => {
           ],
         };
       } else {
-        // BIMCoin jetton transfer
+        // Bimcoin jetton transfer
         if (!intentResult.minter_address) {
           toast({
-            title: "BIMCoin Master Contract Not Configured",
-            description: "BIMCoin master contract address is not configured. Please contact support.",
+            title: "Bimcoin Master Contract Not Configured",
+            description: "Bimcoin master contract address is not configured. Please contact support.",
             variant: "destructive",
           });
           setLoading(false);
@@ -145,7 +145,7 @@ const DepositCard = () => {
           };
         } catch (error) {
           toast({
-            title: "Failed to Prepare BIMCoin Transfer",
+            title: "Failed to Prepare Bimcoin Transfer",
             description: "Could not derive jetton wallet addresses. Please try again.",
             variant: "destructive",
           });
@@ -192,19 +192,19 @@ const DepositCard = () => {
           Deposit {depositType}
         </CardTitle>
         <CardDescription>
-          Deposit {depositType === 'TON' ? 'TON' : 'BIMCoin tokens'} to mint internal BIM and start earning rewards
+          Deposit {depositType === 'TON' ? 'TON' : 'Bimcoin tokens'} to mint internal BIM and start earning rewards
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-2">
           <Label htmlFor="deposit-type">Deposit Type</Label>
-          <Select value={depositType} onValueChange={(value: 'TON' | 'BIMCoin') => setDepositType(value)}>
+          <Select value={depositType} onValueChange={(value: 'TON' | 'Bimcoin') => setDepositType(value)}>
             <SelectTrigger className="bg-muted/50 border-border/50 focus:border-primary/50">
               <SelectValue placeholder="Select deposit type" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="TON">TON</SelectItem>
-              <SelectItem value="BIMCoin">BIMCoin</SelectItem>
+              <SelectItem value="Bimcoin">Bimcoin</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -226,7 +226,7 @@ const DepositCard = () => {
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Coins className="w-4 h-4" />
           <span>
-            {depositType === 'TON' ? '1 TON = 200 BIM' : '1 BIMCoin = 1 BIM'}
+            {depositType === 'TON' ? '1 TON = 200 BIM' : '1 Bimcoin = 1 BIM'}
           </span>
         </div>
 

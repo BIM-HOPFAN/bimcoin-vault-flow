@@ -143,7 +143,7 @@ const JettonMinterManager = () => {
           Jetton Minter Status
         </CardTitle>
         <CardDescription>
-          Manage the BIMCoin jetton minter contract
+          Manage the Bimcoin jetton minter contract
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">

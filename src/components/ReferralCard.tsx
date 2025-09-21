@@ -67,8 +67,8 @@ const ReferralCard = () => {
   const shareReferralLink = () => {
     if (address && navigator.share) {
       navigator.share({
-        title: 'Join BIMCoin',
-        text: 'Start earning OBA tokens with BIMCoin!',
+        title: 'Join Bimcoin',
+        text: 'Start earning OBA tokens with Bimcoin!',
         url: referralLink,
       });
     } else {
