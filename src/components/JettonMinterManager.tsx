@@ -2,7 +2,9 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Settings, Zap, AlertTriangle } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Settings, Zap, AlertTriangle, Save } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -16,6 +18,9 @@ const JettonMinterManager = () => {
   const [minterInfo, setMinterInfo] = useState<MinterInfo | null>(null);
   const [loading, setLoading] = useState(false);
   const [deploying, setDeploying] = useState(false);
+  const [configuring, setConfiguring] = useState(false);
+  const [newMinterAddress, setNewMinterAddress] = useState('');
+  const [showAddressInput, setShowAddressInput] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -86,6 +91,50 @@ const JettonMinterManager = () => {
     }
   };
 
+  const configureMinterAddress = async () => {
+    if (!newMinterAddress.trim()) {
+      toast({
+        title: "Invalid Address",
+        description: "Please enter a valid jetton minter address",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setConfiguring(true);
+    try {
+      // Update the minter address in the config table
+      const { error } = await supabase
+        .from('config')
+        .upsert({
+          key: 'jetton_minter_address',
+          value: newMinterAddress.trim(),
+          description: 'Real jetton minter address deployed via minter.ton.org'
+        });
+
+      if (error) throw error;
+
+      toast({
+        title: "Minter Configured",
+        description: "Successfully configured your real jetton minter address",
+        variant: "default",
+      });
+
+      setNewMinterAddress('');
+      setShowAddressInput(false);
+      await fetchMinterInfo();
+    } catch (error) {
+      console.error('Failed to configure minter:', error);
+      toast({
+        title: "Configuration Failed",
+        description: error instanceof Error ? error.message : "Failed to configure jetton minter",
+        variant: "destructive",
+      });
+    } finally {
+      setConfiguring(false);
+    }
+  };
+
   return (
     <Card className="enhanced-card">
       <CardHeader>
@@ -127,21 +176,72 @@ const JettonMinterManager = () => {
             <div className="flex items-start gap-2 p-3 bg-orange-50 dark:bg-orange-950/20 rounded-md border border-orange-200 dark:border-orange-800">
               <AlertTriangle className="w-4 h-4 text-orange-600 dark:text-orange-400 mt-0.5 flex-shrink-0" />
               <div className="text-sm">
-                <p className="font-medium text-orange-800 dark:text-orange-200">Jetton Minting Not Available</p>
+                <p className="font-medium text-orange-800 dark:text-orange-200">Jetton Minter Configuration Needed</p>
                 <p className="text-orange-700 dark:text-orange-300 mt-1">
-                  You need to deploy a new jetton minter contract since the previous one was renounced.
+                  Configure your real jetton minter address or deploy a new one.
                 </p>
               </div>
             </div>
             
-            <Button 
-              onClick={deployNewMinter}
-              disabled={deploying}
-              className="w-full bg-gradient-primary hover:opacity-90 glow-primary"
-            >
-              <Zap className="w-4 h-4 mr-2" />
-              {deploying ? "Deploying..." : "Deploy New Minter"}
-            </Button>
+            {!showAddressInput ? (
+              <div className="space-y-2">
+                <Button 
+                  onClick={() => setShowAddressInput(true)}
+                  className="w-full bg-gradient-primary hover:opacity-90 glow-primary"
+                >
+                  <Settings className="w-4 h-4 mr-2" />
+                  Configure Existing Minter
+                </Button>
+                
+                <Button 
+                  onClick={deployNewMinter}
+                  disabled={deploying}
+                  variant="outline"
+                  className="w-full"
+                >
+                  <Zap className="w-4 h-4 mr-2" />
+                  {deploying ? "Deploying..." : "Deploy New Minter"}
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <Label htmlFor="minter-address">Jetton Minter Address</Label>
+                  <Input
+                    id="minter-address"
+                    placeholder="EQ..."
+                    value={newMinterAddress}
+                    onChange={(e) => setNewMinterAddress(e.target.value)}
+                    className="font-mono text-sm"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Enter the address of your jetton minter deployed via minter.ton.org
+                  </p>
+                </div>
+                
+                <div className="flex gap-2">
+                  <Button 
+                    onClick={configureMinterAddress}
+                    disabled={configuring || !newMinterAddress.trim()}
+                    className="flex-1"
+                  >
+                    <Save className="w-4 h-4 mr-2" />
+                    {configuring ? "Saving..." : "Save Address"}
+                  </Button>
+                  
+                  <Button 
+                    onClick={() => {
+                      setShowAddressInput(false);
+                      setNewMinterAddress('');
+                    }}
+                    variant="outline"
+                    className="flex-1"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
