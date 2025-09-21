@@ -32,6 +32,9 @@ const WalletConnectButton = () => {
     return `${addr.slice(0, 4)}...${addr.slice(-4)}`;
   };
 
+  // Log when rendering to ensure component mounts
+  console.log('WalletConnectButton rendered, address:', address);
+
   if (address) {
     return (
       <Button 
