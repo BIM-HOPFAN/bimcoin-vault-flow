@@ -6,14 +6,9 @@ interface TonConnectProviderProps {
 }
 
 const TonConnectProvider = ({ children }: TonConnectProviderProps) => {
-  const manifestUrl = `${window.location.origin}/tonconnect-manifest.json`;
-
   return (
     <TonConnectUIProvider 
-      manifestUrl={manifestUrl}
-      actionsConfiguration={{
-        twaReturnUrl: 'https://t.me/BIMCoin_Official'
-      }}
+      manifestUrl="https://db23b08d-08a2-4e7e-b648-6f394e9e12c2.lovableproject.com/tonconnect-manifest.json"
     >
       {children}
     </TonConnectUIProvider>
