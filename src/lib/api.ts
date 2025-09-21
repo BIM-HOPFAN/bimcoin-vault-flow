@@ -175,6 +175,15 @@ export class BimCoinAPI {
     const response = await fetch(`${this.baseUrl}/burn-api/history?wallet_address=${walletAddress}&limit=${limit}`)
     return await response.json()
   }
+
+  async burnBIM(walletAddress: string, bimAmount: number) {
+    const response = await fetch(`${this.baseUrl}/burn-api/burn-bim`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ wallet_address: walletAddress, bim_amount: bimAmount })
+    })
+    return await response.json()
+  }
 }
 
 export const bimCoinAPI = new BimCoinAPI()

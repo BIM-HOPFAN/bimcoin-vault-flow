@@ -136,6 +136,116 @@ serve(async (req) => {
       }
     }
 
+    // Burn BIM for TON
+    if (req.method === 'POST' && path === '/burn-bim') {
+      const { wallet_address, bim_amount } = await req.json()
+
+      if (!wallet_address || !bim_amount || bim_amount <= 0) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Invalid wallet address or BIM amount' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      // Exchange rate: 1 BIM = 0.001 TON (1000 BIM = 1 TON)
+      const ton_amount = bim_amount / 1000
+
+      // Get user
+      const { data: user, error: userError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('wallet_address', wallet_address)
+        .single()
+
+      if (userError || !user) {
+        console.error('User fetch error:', userError)
+        return new Response(
+          JSON.stringify({ success: false, error: 'User not found' }),
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      // Check if user has enough BIM
+      if (user.bim_balance < bim_amount) {
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: `Insufficient BIM balance. Available: ${user.bim_balance}, Required: ${bim_amount}` 
+          }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      // Generate a mock TON payout hash for now (in real implementation, this would be from blockchain)
+      const ton_payout_hash = `ton_payout_${Date.now()}_${Math.random().toString(36).substring(7)}`
+
+      try {
+        // Start transaction by updating user balances
+        const { error: updateError } = await supabase
+          .from('users')
+          .update({
+            bim_balance: user.bim_balance - bim_amount,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', user.id)
+
+        if (updateError) {
+          console.error('User update error:', updateError)
+          throw new Error('Failed to update user balances')
+        }
+
+        // Record the burn transaction
+        const { data: burnRecord, error: burnError } = await supabase
+          .from('burns')
+          .insert({
+            user_id: user.id,
+            bim_amount: bim_amount,
+            ton_amount: ton_amount,
+            jetton_burn_hash: `bim_burn_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+            ton_payout_hash: ton_payout_hash,
+            processed_at: new Date().toISOString(),
+            payout_processed: true // Mark as processed for TON payouts
+          })
+          .select()
+          .single()
+
+        if (burnError) {
+          console.error('Burn record error:', burnError)
+          // Rollback user balance update
+          await supabase
+            .from('users')
+            .update({
+              bim_balance: user.bim_balance,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', user.id)
+          
+          throw new Error('Failed to record burn transaction')
+        }
+
+        console.log(`BIM burn successful: ${bim_amount} BIM → ${ton_amount} TON for user ${wallet_address}`)
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            burn_id: burnRecord.id,
+            bim_burned: bim_amount,
+            ton_received: ton_amount,
+            ton_payout_hash: ton_payout_hash,
+            new_bim_balance: user.bim_balance - bim_amount
+          }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+
+      } catch (error) {
+        console.error('Transaction error:', error)
+        return new Response(
+          JSON.stringify({ success: false, error: 'Failed to process burn transaction' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+    }
+
     // Get burn history
     if (req.method === 'GET' && path === '/history') {
       const wallet_address = url.searchParams.get('wallet_address')

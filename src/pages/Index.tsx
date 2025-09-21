@@ -8,6 +8,7 @@ import ReferralCard from '@/components/ReferralCard';
 import WalletConnectButton from '@/components/WalletConnectButton';
 import JettonMinterManager from '@/components/JettonMinterManager';
 import OBABurnCard from '@/components/OBABurnCard';
+import { BIMBurnCard } from '@/components/BIMBurnCard';
 import { Card, CardContent } from '@/components/ui/card';
 import { Wallet, TrendingUp, Users, Trophy } from 'lucide-react';
 import { useReferral } from '@/hooks/useReferral';
@@ -75,6 +76,10 @@ const Index = () => {
                 <DepositCard />
                 <OBABurnCard 
                   obaBalance={userBalances.oba}
+                  bimBalance={userBalances.bim}
+                  onBalanceUpdate={handleBalanceUpdate}
+                />
+                <BIMBurnCard 
                   bimBalance={userBalances.bim}
                   onBalanceUpdate={handleBalanceUpdate}
                 />

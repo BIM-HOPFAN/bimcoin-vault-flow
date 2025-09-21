@@ -196,20 +196,8 @@ const BalanceCard = ({ onBalancesUpdate }: BalanceCardProps) => {
   }, [address]);
 
   const handleBurnBIM = () => {
-    if (!address) {
-      toast({
-        title: "Wallet not connected",
-        description: "Please connect your TON wallet to burn BIM",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    toast({
-      title: "Burn functionality",
-      description: "Burn BIM tokens to receive TON (feature in development)",
-      variant: "default",
-    });
+    // This functionality is now handled by the BIMBurnCard component
+    // We'll remove this button and integrate BIMBurnCard in the main page
   };
 
   return (
