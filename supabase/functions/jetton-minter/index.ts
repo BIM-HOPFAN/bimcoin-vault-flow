@@ -80,18 +80,23 @@ async function deployJettonMinter() {
       throw new Error('Admin mnemonic not configured')
     }
 
-    // Create jetton content using simple onchain format
-    const nameCell = beginCell().storeUint(0, 8).storeStringTail('Bimcoin').endCell()
-    const symbolCell = beginCell().storeUint(0, 8).storeStringTail('BIM').endCell()
-    const decimalsCell = beginCell().storeUint(0, 8).storeStringTail('9').endCell()
-    const imageCell = beginCell().storeUint(0, 8).storeStringTail('https://db23b08d-08a2-4e7e-b648-6f394e9e12c2.lovableproject.com/icon-512x512.png').endCell()
+    // Create jetton content using TEP-64 compliant format
+    const jettonContentDict = Dictionary.empty(Dictionary.Keys.BigUint(256), Dictionary.Values.Cell())
+    
+    // Add metadata fields with proper TEP-64 keys
+    const nameKey = BigInt('0x' + Buffer.from('name').toString('hex').padStart(64, '0'))
+    const symbolKey = BigInt('0x' + Buffer.from('symbol').toString('hex').padStart(64, '0'))
+    const decimalsKey = BigInt('0x' + Buffer.from('decimals').toString('hex').padStart(64, '0'))
+    const imageKey = BigInt('0x' + Buffer.from('image').toString('hex').padStart(64, '0'))
+    
+    jettonContentDict.set(nameKey, beginCell().storeUint(0, 8).storeStringTail('Bimcoin').endCell())
+    jettonContentDict.set(symbolKey, beginCell().storeUint(0, 8).storeStringTail('BIM').endCell())
+    jettonContentDict.set(decimalsKey, beginCell().storeUint(0, 8).storeStringTail('9').endCell())
+    jettonContentDict.set(imageKey, beginCell().storeUint(0, 8).storeStringTail('https://db23b08d-08a2-4e7e-b648-6f394e9e12c2.lovableproject.com/icon-512x512.png').endCell())
     
     const jettonContent = beginCell()
       .storeUint(0, 8) // onchain content flag
-      .storeRef(nameCell)
-      .storeRef(symbolCell) 
-      .storeRef(decimalsCell)
-      .storeRef(imageCell)
+      .storeDict(jettonContentDict)
       .endCell()
 
     // Create jetton minter init data
