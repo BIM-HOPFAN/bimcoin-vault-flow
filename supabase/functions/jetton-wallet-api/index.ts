@@ -64,7 +64,7 @@ async function deriveJettonWallet(req: Request) {
     
     // Initialize TON client
     const client = new TonClient({
-      endpoint: 'https://mainnet.tonhubapi.com/jsonrpc',
+      endpoint: 'https://mainnet-v4.tonhubapi.com/jsonrpc',
     })
 
     const ownerAddr = Address.parse(owner_address)
