@@ -1,5 +1,5 @@
 import { TonConnectUIProvider } from '@tonconnect/ui-react';
-import { ReactNode } from 'react';
+import { ReactNode, useEffect } from 'react';
 
 interface TonConnectProviderProps {
   children: ReactNode;
@@ -7,6 +7,11 @@ interface TonConnectProviderProps {
 
 const TonConnectProvider = ({ children }: TonConnectProviderProps) => {
   const manifestUrl = `${window.location.origin}/tonconnect-manifest.json`;
+
+  useEffect(() => {
+    console.log('TonConnect Manifest URL:', manifestUrl);
+    console.log('TonConnect initializing...');
+  }, [manifestUrl]);
 
   return (
     <TonConnectUIProvider 
