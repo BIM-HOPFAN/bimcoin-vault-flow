@@ -245,7 +245,7 @@ const BalanceCard = ({ onBalancesUpdate }: BalanceCardProps) => {
           <div className="text-center space-y-1">
             <div className="text-xs text-muted-foreground">Bimcoin</div>
             <div className="text-lg font-bold text-green-400">
-              {address ? balances.realBimcoin.toFixed(2) : '0.00'}
+              {address ? balances.realBimcoin.toLocaleString() : '0'}
             </div>
           </div>
 
