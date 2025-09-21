@@ -427,40 +427,74 @@ async function getBalance(params: URLSearchParams) {
       }
     })
 
-    if (!response.ok) {
+    let tonBalance = '0'
+    if (response.ok) {
+      const data = await response.json()
+      console.log(`TON Balance API Response:`, data)
+      tonBalance = data.result && data.result.balance ? (parseInt(data.result.balance) / 1000000000).toString() : '0'
+    } else {
       console.error(`TON Center API error: ${response.status}`)
-      // Fall back to 0 balance if API fails
-      const { data: user } = await supabase
-        .from('users')
-        .select('bim_balance, oba_balance')
-        .eq('wallet_address', walletAddress)
-        .maybeSingle()
-
-      return new Response(JSON.stringify({
-        ton_balance: '0',
-        bim_balance: user?.bim_balance || '0',
-        oba_balance: user?.oba_balance || '0'
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      })
     }
 
-    const data = await response.json()
-    console.log(`Balance API Response:`, data)
-    
-    const tonBalance = data.result && data.result.balance ? (parseInt(data.result.balance) / 1000000000).toString() : '0'
-
-    // Get user's BIM/OBA balances from database
+    // Get user's internal BIM/OBA balances from database
     const { data: user } = await supabase
       .from('users')
       .select('bim_balance, oba_balance')
       .eq('wallet_address', walletAddress)
       .maybeSingle()
 
+    // Get real Bimcoin jetton balance from user's wallet
+    let realBimcoinBalance = '0'
+    try {
+      if (MINTER_ADDRESS) {
+        console.log('Fetching real Bimcoin jetton balance...')
+        
+        // Derive jetton wallet address
+        const jettonWalletResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/jetton-wallet-api/derive-wallet`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
+          },
+          body: JSON.stringify({
+            owner_address: walletAddress,
+            jetton_master_address: MINTER_ADDRESS
+          })
+        })
+
+        if (jettonWalletResponse.ok) {
+          const jettonWalletData = await jettonWalletResponse.json()
+          const jettonWalletAddress = jettonWalletData.jetton_wallet_address
+          
+          console.log(`Derived jetton wallet: ${jettonWalletAddress}`)
+          
+          // Get jetton balance from the wallet
+          const jettonBalanceResponse = await fetch(`https://toncenter.com/api/v2/runGetMethod?address=${jettonWalletAddress}&method=get_wallet_data&api_key=${TON_CENTER_API_KEY}`)
+          
+          if (jettonBalanceResponse.ok) {
+            const jettonBalanceData = await jettonBalanceResponse.json()
+            
+            if (jettonBalanceData.ok && jettonBalanceData.result && jettonBalanceData.result.stack && jettonBalanceData.result.stack.length > 0) {
+              // The first element in the stack should be the balance
+              const balanceHex = jettonBalanceData.result.stack[0][1]
+              const balanceInt = parseInt(balanceHex, 16)
+              // Convert from nano-jettons to jettons (assuming 9 decimals like TON)
+              realBimcoinBalance = (balanceInt / 1000000000).toString()
+              console.log(`Real Bimcoin balance: ${realBimcoinBalance}`)
+            }
+          }
+        }
+      }
+    } catch (jettonError) {
+      console.log(`Failed to fetch real Bimcoin balance: ${jettonError.message}`)
+      // Continue with 0 balance if jetton balance fetch fails
+    }
+
     return new Response(JSON.stringify({
       ton_balance: tonBalance,
-      bim_balance: user?.bim_balance || '0',
-      oba_balance: user?.oba_balance || '0'
+      bim_balance: user?.bim_balance || '0',  // Internal app balance
+      oba_balance: user?.oba_balance || '0',  // Internal app balance
+      real_bimcoin_balance: realBimcoinBalance  // Real on-chain jetton balance
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
