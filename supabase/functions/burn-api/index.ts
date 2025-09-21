@@ -147,8 +147,8 @@ serve(async (req) => {
         )
       }
 
-      // Exchange rate: 1 BIM = 0.001 TON (1000 BIM = 1 TON)
-      const ton_amount = bim_amount / 1000
+      // Exchange rate: 1 BIM = 0.005 TON (200 BIM = 1 TON)
+      const ton_amount = bim_amount / 200
 
       // Get user
       const { data: user, error: userError } = await supabase

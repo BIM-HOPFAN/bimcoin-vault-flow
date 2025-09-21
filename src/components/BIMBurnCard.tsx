@@ -86,7 +86,7 @@ export const BIMBurnCard: React.FC<BIMBurnCardProps> = ({
     setBurnAmount(bimBalance.toString());
   };
 
-  const tonReceived = parseFloat(burnAmount) / 1000 || 0;
+  const tonReceived = parseFloat(burnAmount) / 200 || 0;
 
   return (
     <Card className="enhanced-card">
@@ -129,7 +129,7 @@ export const BIMBurnCard: React.FC<BIMBurnCardProps> = ({
 
         <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
           <span className="text-sm font-medium">Exchange Rate:</span>
-          <span className="text-sm text-muted-foreground">1000 BIM = 1 TON</span>
+          <span className="text-sm text-muted-foreground">200 BIM = 1 TON</span>
         </div>
 
         {burnAmount && tonReceived > 0 && (
