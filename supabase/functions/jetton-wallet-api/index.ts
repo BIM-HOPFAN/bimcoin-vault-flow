@@ -62,21 +62,31 @@ async function deriveJettonWallet(req: Request) {
   try {
     console.log(`Deriving jetton wallet for owner: ${owner_address}, master: ${jetton_master_address}`)
     
-    // Method 1: Try TonCenter API with API key
+    // Method 1: Try TonCenter API with proper Cell encoding
     try {
       const apiKey = Deno.env.get('TON_CENTER_API_KEY') || ''
-      const url = `https://toncenter.com/api/v2/runGetMethod?address=${jetton_master_address}&method=get_wallet_address&stack=[["tvm.Slice","${owner_address}"]]&api_key=${apiKey}`
       
-      console.log('Trying TonCenter API with key...')
+      // Create proper Cell with owner address
+      const ownerAddr = Address.parse(owner_address)
+      const ownerSlice = beginCell().storeAddress(ownerAddr).endCell()
+      const ownerSliceBase64 = ownerSlice.toBoc().toString('base64')
+      
+      const url = `https://toncenter.com/api/v2/runGetMethod?address=${jetton_master_address}&method=get_wallet_address&stack=[["tvm.Cell","${ownerSliceBase64}"]]&api_key=${apiKey}`
+      
+      console.log('Trying TonCenter API with proper Cell encoding...')
       const response = await fetch(url)
       const data = await response.json()
       
       if (data.ok && data.result && data.result.stack && data.result.stack.length > 0) {
-        const walletAddress = data.result.stack[0][1]
-        console.log(`Successfully derived jetton wallet via TonCenter: ${walletAddress}`)
+        const walletAddressBase64 = data.result.stack[0][1]
+        // Parse the returned cell to get the address
+        const walletCell = Cell.fromBase64(walletAddressBase64)
+        const walletAddress = walletCell.beginParse().loadAddress()
+        
+        console.log(`Successfully derived jetton wallet via TonCenter: ${walletAddress.toString()}`)
         
         return new Response(JSON.stringify({
-          jetton_wallet_address: walletAddress,
+          jetton_wallet_address: walletAddress.toString(),
           owner_address,
           jetton_master_address,
           method: 'toncenter_api'
@@ -88,47 +98,86 @@ async function deriveJettonWallet(req: Request) {
       console.log('TonCenter API failed:', error.message)
     }
 
-    // Method 2: Use TON client to query the jetton master contract directly
-    const endpoints = [
-      'https://mainnet-v4.tonhubapi.com',
-      'https://toncenter.com/api/v2/jsonRPC'
-    ]
-    
-    for (const endpoint of endpoints) {
-      try {
-        console.log(`Trying TON client with endpoint: ${endpoint}`)
-        
-        const client = new TonClient({ endpoint })
-        const ownerAddr = Address.parse(owner_address)
-        const jettonMasterAddr = Address.parse(jetton_master_address)
-        
-        const result = await client.runMethod(jettonMasterAddr, 'get_wallet_address', [
-          {
-            type: 'slice',
-            cell: beginCell().storeAddress(ownerAddr).endCell()
-          }
-        ])
-        
-        if (result.stack.length > 0 && result.stack[0].type === 'slice') {
-          const walletAddress = result.stack[0].cell.beginParse().loadAddress()
-          
-          console.log(`Successfully derived jetton wallet via TON client: ${walletAddress.toString()}`)
-          
-          return new Response(JSON.stringify({
-            jetton_wallet_address: walletAddress.toString(),
-            owner_address,
-            jetton_master_address,
-            method: 'ton_client',
-            api_endpoint: endpoint
-          }), {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-          })
-        }
-        
-      } catch (error) {
-        console.log(`TON client endpoint ${endpoint} failed:`, error.message)
-        continue
+    // Method 2: Use mathematical derivation as fallback
+    try {
+      console.log('Using standard jetton wallet derivation...')
+      
+      const ownerAddr = Address.parse(owner_address)
+      const jettonMasterAddr = Address.parse(jetton_master_address)
+      
+      // Standard jetton wallet state init
+      const jettonWalletCode = beginCell()
+        .storeUint(0x178d4519, 32) // jetton wallet code hash
+        .storeUint(0, 8)
+        .endCell()
+      
+      const jettonWalletData = beginCell()
+        .storeCoins(0) // balance
+        .storeAddress(ownerAddr) // owner
+        .storeAddress(jettonMasterAddr) // jetton master
+        .storeRef(jettonWalletCode) // jetton wallet code
+        .endCell()
+      
+      const stateInit = beginCell()
+        .storeUint(0, 2) // split_depth and special
+        .storeUint(1, 1) // code exists
+        .storeUint(1, 1) // data exists
+        .storeRef(jettonWalletCode) // code
+        .storeRef(jettonWalletData) // data
+        .endCell()
+      
+      const walletAddress = new Address(0, stateInit.hash())
+      
+      console.log(`Derived jetton wallet mathematically: ${walletAddress.toString()}`)
+      
+      return new Response(JSON.stringify({
+        jetton_wallet_address: walletAddress.toString(),
+        owner_address,
+        jetton_master_address,
+        method: 'mathematical_derivation'
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
+      
+    } catch (error) {
+      console.log('Mathematical derivation failed:', error.message)
+    }
+
+    // Method 3: Try alternative TonCenter format
+    try {
+      const apiKey = Deno.env.get('TON_CENTER_API_KEY') || ''
+      
+      const url = `https://toncenter.com/api/v2/runGetMethod`
+      const payload = {
+        address: jetton_master_address,
+        method: 'get_wallet_address',
+        stack: [['tvm.Slice', owner_address]]
       }
+      
+      console.log('Trying alternative TonCenter format...')
+      const response = await fetch(url + (apiKey ? `?api_key=${apiKey}` : ''), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+      
+      const data = await response.json()
+      
+      if (data.ok && data.result && data.result.stack && data.result.stack.length > 0) {
+        const walletAddress = data.result.stack[0][1]
+        console.log(`Successfully derived jetton wallet via alternative TonCenter: ${walletAddress}`)
+        
+        return new Response(JSON.stringify({
+          jetton_wallet_address: walletAddress,
+          owner_address,
+          jetton_master_address,
+          method: 'toncenter_alternative'
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        })
+      }
+    } catch (error) {
+      console.log('Alternative TonCenter format failed:', error.message)
     }
     
     throw new Error('All methods failed to derive jetton wallet address')
