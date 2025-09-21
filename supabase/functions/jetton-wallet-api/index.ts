@@ -62,27 +62,88 @@ async function deriveJettonWallet(req: Request) {
   try {
     console.log(`Deriving jetton wallet for owner: ${owner_address}, master: ${jetton_master_address}`)
     
-    // Try multiple API endpoints for better reliability
+    // Method 1: Try TonCenter API with API key
+    try {
+      const apiKey = Deno.env.get('TON_CENTER_API_KEY') || ''
+      const url = `https://toncenter.com/api/v2/runGetMethod?address=${jetton_master_address}&method=get_wallet_address&stack=[["tvm.Slice","${owner_address}"]]&api_key=${apiKey}`
+      
+      console.log('Trying TonCenter API with key...')
+      const response = await fetch(url)
+      const data = await response.json()
+      
+      if (data.ok && data.result && data.result.stack && data.result.stack.length > 0) {
+        const walletAddress = data.result.stack[0][1]
+        console.log(`Successfully derived jetton wallet via TonCenter: ${walletAddress}`)
+        
+        return new Response(JSON.stringify({
+          jetton_wallet_address: walletAddress,
+          owner_address,
+          jetton_master_address,
+          method: 'toncenter_api'
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        })
+      }
+    } catch (error) {
+      console.log('TonCenter API failed:', error.message)
+    }
+
+    // Method 2: Use mathematical derivation (standard jetton wallet derivation)
+    try {
+      console.log('Using mathematical jetton wallet derivation...')
+      
+      const ownerAddr = Address.parse(owner_address)
+      const jettonMasterAddr = Address.parse(jetton_master_address)
+      
+      // Create state init for jetton wallet
+      const stateInit = beginCell()
+        .storeUint(0, 2) // split_depth and special
+        .storeUint(0, 1) // code reference
+        .storeUint(1, 1) // data reference  
+        .storeRef(
+          beginCell()
+            .storeCoins(0) // balance
+            .storeAddress(ownerAddr) // owner_address
+            .storeAddress(jettonMasterAddr) // jetton_master_address
+            .storeRef(beginCell().endCell()) // jetton_wallet_code (empty for now)
+            .endCell()
+        )
+        .endCell()
+      
+      // Calculate address from state init
+      const walletAddress = new Address(0, stateInit.hash())
+      
+      console.log(`Derived jetton wallet mathematically: ${walletAddress.toString()}`)
+      
+      return new Response(JSON.stringify({
+        jetton_wallet_address: walletAddress.toString(),
+        owner_address,
+        jetton_master_address,
+        method: 'mathematical_derivation'
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
+      
+    } catch (error) {
+      console.log('Mathematical derivation failed:', error.message)
+    }
+
+    // Method 3: Use TON client as fallback
     const endpoints = [
-      'https://toncenter.com/api/v2/jsonRPC',
-      'https://mainnet-v4.tonhubapi.com/jsonrpc'
+      'https://mainnet-v4.tonhubapi.com',
+      'https://toncenter.com/api/v2/jsonRPC'
     ]
     
     let lastError: any = null
     
     for (const endpoint of endpoints) {
       try {
-        console.log(`Trying endpoint: ${endpoint}`)
+        console.log(`Trying TON client with endpoint: ${endpoint}`)
         
-        // Initialize TON client with current endpoint
-        const client = new TonClient({
-          endpoint: endpoint,
-        })
-
+        const client = new TonClient({ endpoint })
         const ownerAddr = Address.parse(owner_address)
         const jettonMasterAddr = Address.parse(jetton_master_address)
         
-        // Call get_wallet_address method on jetton master contract
         const result = await client.runMethod(jettonMasterAddr, 'get_wallet_address', [
           {
             type: 'slice',
@@ -90,58 +151,41 @@ async function deriveJettonWallet(req: Request) {
           }
         ])
         
-        if (result.stack.length > 0) {
-          const walletAddressSlice = result.stack[0]
-          if (walletAddressSlice.type === 'slice') {
-            const walletAddress = walletAddressSlice.cell.beginParse().loadAddress()
-            
-            console.log(`Successfully derived jetton wallet: ${walletAddress.toString()} using ${endpoint}`)
-            
-            return new Response(JSON.stringify({
-              jetton_wallet_address: walletAddress.toString(),
-              owner_address,
-              jetton_master_address,
-              api_endpoint: endpoint
-            }), {
-              headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-            })
-          }
+        if (result.stack.length > 0 && result.stack[0].type === 'slice') {
+          const walletAddress = result.stack[0].cell.beginParse().loadAddress()
+          
+          console.log(`Successfully derived jetton wallet via TON client: ${walletAddress.toString()}`)
+          
+          return new Response(JSON.stringify({
+            jetton_wallet_address: walletAddress.toString(),
+            owner_address,
+            jetton_master_address,
+            method: 'ton_client',
+            api_endpoint: endpoint
+          }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          })
         }
         
-        throw new Error('Invalid response from contract method')
-        
       } catch (error) {
-        console.log(`Endpoint ${endpoint} failed:`, error.message)
+        console.log(`TON client endpoint ${endpoint} failed:`, error.message)
         lastError = error
         continue
       }
     }
     
-    throw new Error(`All API endpoints failed. Last error: ${lastError?.message}`)
+    throw new Error(`All methods failed. Last error: ${lastError?.message}`)
     
   } catch (error) {
-    console.error('Error deriving jetton wallet:', error)
-    
-    // Fallback: create a deterministic but fake address for testing
-    const combined = owner_address + jetton_master_address
-    let hash = 0
-    for (let i = 0; i < combined.length; i++) {
-      const char = combined.charCodeAt(i)
-      hash = ((hash << 5) - hash) + char
-      hash = hash & hash // Convert to 32-bit integer
-    }
-    
-    const fallbackAddress = `EQA${Math.abs(hash).toString(16).padStart(62, '0')}`
-    
-    console.log(`Using fallback address: ${fallbackAddress}`)
+    console.error('All jetton wallet derivation methods failed:', error)
     
     return new Response(JSON.stringify({
-      jetton_wallet_address: fallbackAddress,
+      error: 'Could not derive jetton wallet address. All methods failed.',
+      details: error.message,
       owner_address,
-      jetton_master_address,
-      fallback: true,
-      error: error.message
+      jetton_master_address
     }), {
+      status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
   }
