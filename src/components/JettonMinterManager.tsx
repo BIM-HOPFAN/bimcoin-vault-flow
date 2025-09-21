@@ -171,8 +171,8 @@ const JettonMinterManager = () => {
           </>
         )}
 
-        {minterInfo?.status === 'not_configured' && (
-          <div className="space-y-3">
+        <div className="space-y-3">
+          {minterInfo?.status === 'not_configured' && (
             <div className="flex items-start gap-2 p-3 bg-orange-50 dark:bg-orange-950/20 rounded-md border border-orange-200 dark:border-orange-800">
               <AlertTriangle className="w-4 h-4 text-orange-600 dark:text-orange-400 mt-0.5 flex-shrink-0" />
               <div className="text-sm">
@@ -182,17 +182,19 @@ const JettonMinterManager = () => {
                 </p>
               </div>
             </div>
-            
-            {!showAddressInput ? (
-              <div className="space-y-2">
-                <Button 
-                  onClick={() => setShowAddressInput(true)}
-                  className="w-full bg-gradient-primary hover:opacity-90 glow-primary"
-                >
-                  <Settings className="w-4 h-4 mr-2" />
-                  Configure Existing Minter
-                </Button>
-                
+          )}
+          
+          {!showAddressInput ? (
+            <div className="space-y-2">
+              <Button 
+                onClick={() => setShowAddressInput(true)}
+                className="w-full bg-gradient-primary hover:opacity-90 glow-primary"
+              >
+                <Settings className="w-4 h-4 mr-2" />
+                {minterInfo?.status === 'configured' ? 'Update Minter Address' : 'Configure Existing Minter'}
+              </Button>
+              
+              {minterInfo?.status === 'not_configured' && (
                 <Button 
                   onClick={deployNewMinter}
                   disabled={deploying}
@@ -202,48 +204,48 @@ const JettonMinterManager = () => {
                   <Zap className="w-4 h-4 mr-2" />
                   {deploying ? "Deploying..." : "Deploy New Minter"}
                 </Button>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="space-y-2">
+                <Label htmlFor="minter-address">Jetton Minter Address</Label>
+                <Input
+                  id="minter-address"
+                  placeholder="EQ..."
+                  value={newMinterAddress}
+                  onChange={(e) => setNewMinterAddress(e.target.value)}
+                  className="font-mono text-sm"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Enter the address of your jetton minter deployed via minter.ton.org
+                </p>
               </div>
-            ) : (
-              <div className="space-y-3">
-                <div className="space-y-2">
-                  <Label htmlFor="minter-address">Jetton Minter Address</Label>
-                  <Input
-                    id="minter-address"
-                    placeholder="EQ..."
-                    value={newMinterAddress}
-                    onChange={(e) => setNewMinterAddress(e.target.value)}
-                    className="font-mono text-sm"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Enter the address of your jetton minter deployed via minter.ton.org
-                  </p>
-                </div>
+              
+              <div className="flex gap-2">
+                <Button 
+                  onClick={configureMinterAddress}
+                  disabled={configuring || !newMinterAddress.trim()}
+                  className="flex-1"
+                >
+                  <Save className="w-4 h-4 mr-2" />
+                  {configuring ? "Saving..." : "Save Address"}
+                </Button>
                 
-                <div className="flex gap-2">
-                  <Button 
-                    onClick={configureMinterAddress}
-                    disabled={configuring || !newMinterAddress.trim()}
-                    className="flex-1"
-                  >
-                    <Save className="w-4 h-4 mr-2" />
-                    {configuring ? "Saving..." : "Save Address"}
-                  </Button>
-                  
-                  <Button 
-                    onClick={() => {
-                      setShowAddressInput(false);
-                      setNewMinterAddress('');
-                    }}
-                    variant="outline"
-                    className="flex-1"
-                  >
-                    Cancel
-                  </Button>
-                </div>
+                <Button 
+                  onClick={() => {
+                    setShowAddressInput(false);
+                    setNewMinterAddress('');
+                  }}
+                  variant="outline"
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
               </div>
-            )}
-          </div>
-        )}
+            </div>
+          )}
+        </div>
 
         <Button 
           onClick={fetchMinterInfo}
