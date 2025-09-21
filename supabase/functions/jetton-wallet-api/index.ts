@@ -88,53 +88,11 @@ async function deriveJettonWallet(req: Request) {
       console.log('TonCenter API failed:', error.message)
     }
 
-    // Method 2: Use mathematical derivation (standard jetton wallet derivation)
-    try {
-      console.log('Using mathematical jetton wallet derivation...')
-      
-      const ownerAddr = Address.parse(owner_address)
-      const jettonMasterAddr = Address.parse(jetton_master_address)
-      
-      // Create state init for jetton wallet
-      const stateInit = beginCell()
-        .storeUint(0, 2) // split_depth and special
-        .storeUint(0, 1) // code reference
-        .storeUint(1, 1) // data reference  
-        .storeRef(
-          beginCell()
-            .storeCoins(0) // balance
-            .storeAddress(ownerAddr) // owner_address
-            .storeAddress(jettonMasterAddr) // jetton_master_address
-            .storeRef(beginCell().endCell()) // jetton_wallet_code (empty for now)
-            .endCell()
-        )
-        .endCell()
-      
-      // Calculate address from state init
-      const walletAddress = new Address(0, stateInit.hash())
-      
-      console.log(`Derived jetton wallet mathematically: ${walletAddress.toString()}`)
-      
-      return new Response(JSON.stringify({
-        jetton_wallet_address: walletAddress.toString(),
-        owner_address,
-        jetton_master_address,
-        method: 'mathematical_derivation'
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      })
-      
-    } catch (error) {
-      console.log('Mathematical derivation failed:', error.message)
-    }
-
-    // Method 3: Use TON client as fallback
+    // Method 2: Use TON client to query the jetton master contract directly
     const endpoints = [
       'https://mainnet-v4.tonhubapi.com',
       'https://toncenter.com/api/v2/jsonRPC'
     ]
-    
-    let lastError: any = null
     
     for (const endpoint of endpoints) {
       try {
@@ -169,12 +127,11 @@ async function deriveJettonWallet(req: Request) {
         
       } catch (error) {
         console.log(`TON client endpoint ${endpoint} failed:`, error.message)
-        lastError = error
         continue
       }
     }
     
-    throw new Error(`All methods failed. Last error: ${lastError?.message}`)
+    throw new Error('All methods failed to derive jetton wallet address')
     
   } catch (error) {
     console.error('All jetton wallet derivation methods failed:', error)
