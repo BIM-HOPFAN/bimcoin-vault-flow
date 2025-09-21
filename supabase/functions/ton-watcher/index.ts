@@ -443,44 +443,40 @@ async function getBalance(params: URLSearchParams) {
       .eq('wallet_address', walletAddress)
       .maybeSingle()
 
-    // Get real Bimcoin jetton balance from user's wallet
+    // Get real Bimcoin jetton balance directly from user's main wallet
     let realBimcoinBalance = '0'
     try {
       if (MINTER_ADDRESS) {
-        console.log('Fetching real Bimcoin jetton balance...')
+        console.log('Fetching Bimcoin jetton balance from main wallet...')
         
-        // Derive jetton wallet address
-        const jettonWalletResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/jetton-wallet-api/derive-wallet`, {
-          method: 'POST',
+        // Check jetton balance directly from main wallet using TonAPI
+        const jettonBalanceResponse = await fetch(`https://tonapi.io/v2/accounts/${walletAddress}/jettons/${MINTER_ADDRESS}`, {
           headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
-          },
-          body: JSON.stringify({
-            owner_address: walletAddress,
-            jetton_master_address: MINTER_ADDRESS
-          })
+            'Content-Type': 'application/json'
+          }
         })
-
-        if (jettonWalletResponse.ok) {
-          const jettonWalletData = await jettonWalletResponse.json()
-          const jettonWalletAddress = jettonWalletData.jetton_wallet_address
+        
+        if (jettonBalanceResponse.ok) {
+          const jettonBalanceData = await jettonBalanceResponse.json()
+          console.log('TonAPI jetton balance response:', jettonBalanceData)
           
-          console.log(`Derived jetton wallet: ${jettonWalletAddress}`)
+          if (jettonBalanceData.balance) {
+            // Convert from nano-jettons to jettons (assuming 9 decimals)
+            realBimcoinBalance = (parseInt(jettonBalanceData.balance) / 1000000000).toString()
+            console.log(`Real Bimcoin balance: ${realBimcoinBalance}`)
+          }
+        } else {
+          console.log(`TonAPI jetton balance failed: ${jettonBalanceResponse.status}`)
+          // Fallback: try TON Center API if TonAPI fails
+          const tonCenterResponse = await fetch(`https://toncenter.com/api/v2/getTokenData?address=${walletAddress}&jetton=${MINTER_ADDRESS}&api_key=${TON_CENTER_API_KEY}`)
           
-          // Get jetton balance from the wallet
-          const jettonBalanceResponse = await fetch(`https://toncenter.com/api/v2/runGetMethod?address=${jettonWalletAddress}&method=get_wallet_data&api_key=${TON_CENTER_API_KEY}`)
-          
-          if (jettonBalanceResponse.ok) {
-            const jettonBalanceData = await jettonBalanceResponse.json()
+          if (tonCenterResponse.ok) {
+            const tonCenterData = await tonCenterResponse.json()
+            console.log('TON Center jetton balance response:', tonCenterData)
             
-            if (jettonBalanceData.ok && jettonBalanceData.result && jettonBalanceData.result.stack && jettonBalanceData.result.stack.length > 0) {
-              // The first element in the stack should be the balance
-              const balanceHex = jettonBalanceData.result.stack[0][1]
-              const balanceInt = parseInt(balanceHex, 16)
-              // Convert from nano-jettons to jettons (assuming 9 decimals like TON)
-              realBimcoinBalance = (balanceInt / 1000000000).toString()
-              console.log(`Real Bimcoin balance: ${realBimcoinBalance}`)
+            if (tonCenterData.ok && tonCenterData.result && tonCenterData.result.balance) {
+              realBimcoinBalance = (parseInt(tonCenterData.result.balance) / 1000000000).toString()
+              console.log(`Real Bimcoin balance from TON Center: ${realBimcoinBalance}`)
             }
           }
         }
