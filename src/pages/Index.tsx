@@ -81,10 +81,15 @@ const Index = () => {
                 <TaskCard />
               </div>
 
-              {/* Right column - Referrals and Minter */}
+              {/* Right column - Referrals and Admin */}
               <div className="space-y-6">
                 <ReferralCard />
-                <JettonMinterManager />
+                {/* Admin Panel - Only show for development/admin users */}
+                {(address === 'EQBkKJWaEWnpczK4KwKpR0Cb9kLXfB4HMfq_CdKSYlPo1Yrs' || 
+                  window.location.hostname === 'localhost' ||
+                  window.location.hostname.includes('lovableproject.com')) && (
+                  <JettonMinterManager />
+                )}
                 
                 {/* Quick Stats */}
                 <Card className="enhanced-card">
