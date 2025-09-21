@@ -11,7 +11,9 @@ const TonConnectProvider = ({ children }: TonConnectProviderProps) => {
   return (
     <TonConnectUIProvider 
       manifestUrl={manifestUrl}
-      uiPreferences={{ theme: 'SYSTEM' }}
+      actionsConfiguration={{
+        twaReturnUrl: 'https://t.me/BIMCoin_Official'
+      }}
     >
       {children}
     </TonConnectUIProvider>
