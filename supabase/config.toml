@@ -14,9 +14,3 @@ verify_jwt = false
 
 [functions.ton-watcher]
 verify_jwt = false
-
-[functions.burn-api]
-verify_jwt = false
-
-[functions.jetton-wallet-api]
-verify_jwt = false

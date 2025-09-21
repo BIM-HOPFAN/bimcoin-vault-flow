@@ -6,22 +6,14 @@ import MiningCard from '@/components/MiningCard';
 import TaskCard from '@/components/TaskCard';
 import ReferralCard from '@/components/ReferralCard';
 import WalletConnectButton from '@/components/WalletConnectButton';
-import JettonMinterManager from '@/components/JettonMinterManager';
-import OBABurnCard from '@/components/OBABurnCard';
 import { Card, CardContent } from '@/components/ui/card';
 import { Wallet, TrendingUp, Users, Trophy } from 'lucide-react';
 import { useReferral } from '@/hooks/useReferral';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect } from 'react';
 
 const Index = () => {
   const address = useTonAddress();
   const { referralCode } = useReferral();
-  const [balanceUpdateKey, setBalanceUpdateKey] = useState(0);
-  const [userBalances, setUserBalances] = useState({ oba: 0, bim: 0 });
-  
-  const handleBalanceUpdate = useCallback(() => {
-    setBalanceUpdateKey(prev => prev + 1);
-  }, []);
 
   // Log referral code for debugging
   useEffect(() => {
@@ -63,28 +55,19 @@ const Index = () => {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               {/* Left column - Balance and Mining */}
               <div className="space-y-6">
-                <BalanceCard 
-                  key={`balance-${balanceUpdateKey}`}
-                  onBalancesUpdate={setUserBalances}
-                />
+                <BalanceCard />
                 <MiningCard />
               </div>
 
               {/* Middle column - Deposit and Tasks */}
               <div className="space-y-6">
                 <DepositCard />
-                <OBABurnCard 
-                  obaBalance={userBalances.oba}
-                  bimBalance={userBalances.bim}
-                  onBalanceUpdate={handleBalanceUpdate}
-                />
                 <TaskCard />
               </div>
 
-              {/* Right column - Referrals and Minter */}
+              {/* Right column - Referrals and Stats */}
               <div className="space-y-6">
                 <ReferralCard />
-                <JettonMinterManager />
                 
                 {/* Quick Stats */}
                 <Card className="enhanced-card">

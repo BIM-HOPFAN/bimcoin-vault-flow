@@ -23,8 +23,8 @@ const MiningCard = () => {
     
     try {
       const status = await bimCoinAPI.getMiningStatus(address);
-      if (status.active_mining) {
-        const session = status.active_mining;
+      if (status.success && status.data) {
+        const session = status.data;
         setMiningSession(session);
         
         if (session.status === 'active') {
@@ -36,7 +36,7 @@ const MiningCard = () => {
           const progress = Math.min((elapsed / totalDuration) * 100, 100);
           
           setMiningProgress(progress);
-          setEarnedOBA(status.current_earnings || 0);
+          setEarnedOBA(session.oba_earned || 0);
           setTimeRemaining(Math.max(0, totalDuration - elapsed));
         } else {
           setMining(false);
@@ -44,11 +44,6 @@ const MiningCard = () => {
           setEarnedOBA(0);
           setTimeRemaining(0);
         }
-      } else {
-        setMining(false);
-        setMiningProgress(0);
-        setEarnedOBA(0);
-        setTimeRemaining(0);
       }
     } catch (error) {
       console.error('Failed to fetch mining status:', error);
@@ -58,10 +53,8 @@ const MiningCard = () => {
   // Update mining progress in real time
   useEffect(() => {
     let interval: NodeJS.Timeout;
-    let apiInterval: NodeJS.Timeout;
     
     if (mining && miningSession) {
-      // Update UI every second
       interval = setInterval(() => {
         const startTime = new Date(miningSession.start_time).getTime();
         const now = Date.now();
@@ -75,19 +68,14 @@ const MiningCard = () => {
           setTimeRemaining(0);
         } else {
           setMiningProgress(progress);
+          setEarnedOBA((progress / 100) * 50); // 50 OBA per day
           setTimeRemaining(totalDuration - elapsed);
         }
       }, 1000);
-
-      // Update earnings from API every 30 seconds
-      apiInterval = setInterval(() => {
-        fetchMiningStatus();
-      }, 30000);
     }
 
     return () => {
       if (interval) clearInterval(interval);
-      if (apiInterval) clearInterval(apiInterval);
     };
   }, [mining, miningSession]);
 
@@ -168,10 +156,9 @@ const MiningCard = () => {
   };
 
   const formatTime = (seconds: number) => {
-    const totalSeconds = Math.floor(seconds);
-    const hours = Math.floor(totalSeconds / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const secs = totalSeconds % 60;
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
     return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
@@ -212,7 +199,7 @@ const MiningCard = () => {
               <span className="text-sm font-medium">Time Left</span>
             </div>
             <div className="text-lg font-bold">
-              {mining && timeRemaining > 0 ? formatTime(timeRemaining) : "00:00:00"}
+              {mining ? formatTime(timeRemaining) : "00:00:00"}
             </div>
           </div>
         </div>
