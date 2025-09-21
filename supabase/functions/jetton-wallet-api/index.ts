@@ -62,40 +62,62 @@ async function deriveJettonWallet(req: Request) {
   try {
     console.log(`Deriving jetton wallet for owner: ${owner_address}, master: ${jetton_master_address}`)
     
-    // Initialize TON client
-    const client = new TonClient({
-      endpoint: 'https://mainnet.tonhubapi.com/jsonrpc',
-    })
-
-    const ownerAddr = Address.parse(owner_address)
-    const jettonMasterAddr = Address.parse(jetton_master_address)
+    // Try multiple API endpoints for better reliability
+    const endpoints = [
+      'https://toncenter.com/api/v2/jsonRPC',
+      'https://mainnet-v4.tonhubapi.com/jsonrpc'
+    ]
     
-    // Call get_wallet_address method on jetton master contract
-    const result = await client.runMethod(jettonMasterAddr, 'get_wallet_address', [
-      {
-        type: 'slice',
-        cell: beginCell().storeAddress(ownerAddr).endCell()
-      }
-    ])
+    let lastError: any = null
     
-    if (result.stack.length > 0) {
-      const walletAddressSlice = result.stack[0]
-      if (walletAddressSlice.type === 'slice') {
-        const walletAddress = walletAddressSlice.cell.beginParse().loadAddress()
+    for (const endpoint of endpoints) {
+      try {
+        console.log(`Trying endpoint: ${endpoint}`)
         
-        console.log(`Successfully derived jetton wallet: ${walletAddress.toString()}`)
-        
-        return new Response(JSON.stringify({
-          jetton_wallet_address: walletAddress.toString(),
-          owner_address,
-          jetton_master_address
-        }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        // Initialize TON client with current endpoint
+        const client = new TonClient({
+          endpoint: endpoint,
         })
+
+        const ownerAddr = Address.parse(owner_address)
+        const jettonMasterAddr = Address.parse(jetton_master_address)
+        
+        // Call get_wallet_address method on jetton master contract
+        const result = await client.runMethod(jettonMasterAddr, 'get_wallet_address', [
+          {
+            type: 'slice',
+            cell: beginCell().storeAddress(ownerAddr).endCell()
+          }
+        ])
+        
+        if (result.stack.length > 0) {
+          const walletAddressSlice = result.stack[0]
+          if (walletAddressSlice.type === 'slice') {
+            const walletAddress = walletAddressSlice.cell.beginParse().loadAddress()
+            
+            console.log(`Successfully derived jetton wallet: ${walletAddress.toString()} using ${endpoint}`)
+            
+            return new Response(JSON.stringify({
+              jetton_wallet_address: walletAddress.toString(),
+              owner_address,
+              jetton_master_address,
+              api_endpoint: endpoint
+            }), {
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            })
+          }
+        }
+        
+        throw new Error('Invalid response from contract method')
+        
+      } catch (error) {
+        console.log(`Endpoint ${endpoint} failed:`, error.message)
+        lastError = error
+        continue
       }
     }
     
-    throw new Error('Failed to get jetton wallet address from contract')
+    throw new Error(`All API endpoints failed. Last error: ${lastError?.message}`)
     
   } catch (error) {
     console.error('Error deriving jetton wallet:', error)
