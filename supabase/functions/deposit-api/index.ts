@@ -63,8 +63,8 @@ async function createDepositIntent(req: Request) {
     })
   }
 
-  if (!['TON', 'BIMCoin'].includes(deposit_type)) {
-    return new Response(JSON.stringify({ error: 'Invalid deposit type. Must be TON or BIMCoin' }), {
+  if (!['TON', 'Bimcoin'].includes(deposit_type)) {
+    return new Response(JSON.stringify({ error: 'Invalid deposit type. Must be TON or Bimcoin' }), {
       status: 400,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
@@ -104,7 +104,7 @@ async function createDepositIntent(req: Request) {
     const bimPerTon = parseFloat(config.value)
     bimAmount = parseFloat(deposit_amount) * bimPerTon
   } else {
-    // BIMCoin deposits: 1 BIMCoin = 1 internal BIM
+    // Bimcoin deposits: 1 Bimcoin = 1 internal BIM
     const { data: config, error: configError } = await supabase
       .from('config')
       .select('value')
@@ -139,8 +139,8 @@ async function createDepositIntent(req: Request) {
   // Get treasury address from config
   const treasuryAddress = Deno.env.get('TREASURY_ADDRESS')
 
-  // Get minter address for BIMCoin deposits  
-  const minterAddress = deposit_type === 'BIMCoin' ? (Deno.env.get('MINTER_ADDRESS') || await getMinterAddressFromConfig()) : null;
+  // Get minter address for Bimcoin deposits  
+  const minterAddress = deposit_type === 'Bimcoin' ? (Deno.env.get('MINTER_ADDRESS') || await getMinterAddressFromConfig()) : null;
 
   return new Response(JSON.stringify({
     deposit_id: deposit.id,
