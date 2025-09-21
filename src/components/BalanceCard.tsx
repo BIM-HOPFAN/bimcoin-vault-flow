@@ -10,6 +10,7 @@ interface Balances {
   ton: number;
   bim: number;
   oba: number;
+  realBimcoin: number;
 }
 
 interface BalanceCardProps {
@@ -17,7 +18,7 @@ interface BalanceCardProps {
 }
 
 const BalanceCard = ({ onBalancesUpdate }: BalanceCardProps) => {
-  const [balances, setBalances] = useState<Balances>({ ton: 0, bim: 0, oba: 0 });
+  const [balances, setBalances] = useState<Balances>({ ton: 0, bim: 0, oba: 0, realBimcoin: 0 });
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [tonPrice, setTonPrice] = useState(2.5); // Default to $2.5, will fetch real price
@@ -90,21 +91,28 @@ const BalanceCard = ({ onBalancesUpdate }: BalanceCardProps) => {
         const newBalances = {
           ton: 0, // Will try to get this separately
           bim: parseFloat(userProfile.user.bim_balance || '0'),
-          oba: parseFloat(userProfile.user.oba_balance || '0')
+          oba: parseFloat(userProfile.user.oba_balance || '0'),
+          realBimcoin: 0 // Will get from API
         };
         
-        // Try to get TON balance from API
+        // Try to get TON balance and real Bimcoin balance from API
         try {
-          console.log('Fetching TON balance...');
+          console.log('Fetching balances from blockchain...');
           const balanceData = await bimCoinAPI.getBalance(address);
-          if (balanceData.success && balanceData.ton_balance) {
-            newBalances.ton = parseFloat(balanceData.ton_balance);
-            console.log('TON balance fetched:', newBalances.ton);
+          if (balanceData.success) {
+            if (balanceData.ton_balance) {
+              newBalances.ton = parseFloat(balanceData.ton_balance);
+              console.log('TON balance fetched:', newBalances.ton);
+            }
+            if (balanceData.real_bimcoin_balance) {
+              newBalances.realBimcoin = parseFloat(balanceData.real_bimcoin_balance);
+              console.log('Real Bimcoin balance fetched:', newBalances.realBimcoin);
+            }
           } else {
-            console.log('TON balance API failed, using 0');
+            console.log('Balance API failed, using defaults');
           }
-        } catch (tonError) {
-          console.log('TON balance fetch error:', tonError);
+        } catch (balanceError) {
+          console.log('Balance fetch error:', balanceError);
         }
         
         setBalances(newBalances);
@@ -182,7 +190,7 @@ const BalanceCard = ({ onBalancesUpdate }: BalanceCardProps) => {
       // Check for pending deposits that might need processing
       setTimeout(() => triggerDepositCheck(), 3000);
     } else {
-      setBalances({ ton: 0, bim: 0, oba: 0 });
+      setBalances({ ton: 0, bim: 0, oba: 0, realBimcoin: 0 });
       setUser(null);
     }
   }, [address]);
@@ -216,7 +224,7 @@ const BalanceCard = ({ onBalancesUpdate }: BalanceCardProps) => {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-4 gap-3">
           {/* TON Balance */}
           <div className="text-center space-y-1">
             <div className="text-sm text-muted-foreground">TON</div>
@@ -225,11 +233,19 @@ const BalanceCard = ({ onBalancesUpdate }: BalanceCardProps) => {
             </div>
           </div>
 
-          {/* BIM Balance */}
+          {/* BIM Balance (Internal) */}
           <div className="text-center space-y-1">
-            <div className="text-sm text-muted-foreground">BIM</div>
+            <div className="text-xs text-muted-foreground">BIM (App)</div>
             <div className="text-lg font-bold text-secondary">
               {address ? balances.bim.toFixed(2) : '0.00'}
+            </div>
+          </div>
+
+          {/* Real Bimcoin Balance */}
+          <div className="text-center space-y-1">
+            <div className="text-xs text-muted-foreground">Bimcoin</div>
+            <div className="text-lg font-bold text-green-400">
+              {address ? balances.realBimcoin.toFixed(2) : '0.00'}
             </div>
           </div>
 

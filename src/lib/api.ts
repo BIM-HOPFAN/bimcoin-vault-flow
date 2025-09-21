@@ -131,7 +131,8 @@ export class BimCoinAPI {
         success: true, 
         ton_balance: data.ton_balance,
         bim_balance: data.bim_balance,
-        oba_balance: data.oba_balance
+        oba_balance: data.oba_balance,
+        real_bimcoin_balance: data.real_bimcoin_balance
       }
     } catch (error) {
       console.error('Balance API error:', error)
