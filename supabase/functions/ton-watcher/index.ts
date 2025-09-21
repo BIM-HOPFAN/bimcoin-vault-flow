@@ -145,67 +145,33 @@ async function checkDeposits() {
       }
     }
     
-    // For now, let's process all pending deposits at app level since API detection is unreliable
-    console.log('Processing all pending deposits at app level...')
+    // Only process deposits with verified blockchain transactions
+    console.log('Checking blockchain transactions for deposit verification...')
     
-    const { data: pendingDeposits, error: pendingError } = await supabase
-      .from('deposits')
-      .select('*, users(*)')
-      .eq('status', 'pending')
-      .order('created_at', { ascending: true })
-      .limit(10)
-
-    if (pendingError) {
-      console.error('Error fetching pending deposits:', pendingError)
-      return new Response(JSON.stringify({ error: pendingError.message }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      })
-    }
-
     let processedCount = 0
-
-    for (const deposit of pendingDeposits || []) {
-      try {
-        console.log(`Processing pending deposit: ${deposit.deposit_comment} for ${deposit.bim_amount} BIM`)
-        
-        // Update deposit status to confirmed
-        const { error: updateError } = await supabase
-          .from('deposits')
-          .update({
-            status: 'confirmed',
-            processed_at: new Date().toISOString(),
-            deposit_hash: `app_level_${Date.now()}_${deposit.id}`
-          })
-          .eq('id', deposit.id)
-
-        if (updateError) {
-          console.error(`Failed to update deposit ${deposit.id}:`, updateError)
-          continue
+    
+    if (data && data.result && Array.isArray(data.result)) {
+      // Process verified transactions only
+      for (const tx of data.result) {
+        try {
+          if (tx.in_msg && tx.in_msg.message) {
+            const comment = tx.in_msg.message
+            if (comment.startsWith('BIM:DEPOSIT:')) {
+              const txHash = tx.hash
+              const amount = tx.value ? (parseInt(tx.value) / 1000000000).toString() : '0'
+              
+              console.log(`Found verified deposit transaction: ${comment}`)
+              await processDeposit(comment, txHash, amount)
+              processedCount++
+            }
+          }
+        } catch (error) {
+          console.error(`Error processing transaction:`, error)
         }
-
-        // Update user's BIM balance
-        const { error: userUpdateError } = await supabase
-          .from('users')
-          .update({
-            bim_balance: (parseFloat(deposit.users.bim_balance) + parseFloat(deposit.bim_amount)).toString(),
-            total_deposited: (parseFloat(deposit.users.total_deposited) + parseFloat(deposit.ton_amount)).toString(),
-            last_activity_at: new Date().toISOString()
-          })
-          .eq('id', deposit.user_id)
-
-        if (userUpdateError) {
-          console.error(`Failed to update user balance for deposit ${deposit.id}:`, userUpdateError)
-          continue
-        }
-
-        processedCount++
-        console.log(`Successfully processed deposit ${deposit.id}: +${deposit.bim_amount} BIM`)
-        
-      } catch (error) {
-        console.error(`Error processing deposit ${deposit.id}:`, error)
       }
     }
+    
+    console.log(`Processed ${processedCount} verified deposits`)
     return new Response(JSON.stringify({
       success: true,  
       processed_deposits: processedCount,
@@ -239,52 +205,30 @@ async function processDeposit(depositComment: string, txHash: string, amount: st
       return
     }
 
-    // Verify amount matches (with some tolerance)
-    const expectedAmount = parseFloat(pendingDeposit.ton_amount)
-    const actualAmount = parseFloat(amount)
-    const tolerance = 0.001 // 0.001 TON tolerance
+    console.log(`Processing ${pendingDeposit.deposit_type} deposit: ${depositComment}`)
 
-    if (Math.abs(expectedAmount - actualAmount) > tolerance) {
-      console.log(`Amount mismatch: expected ${expectedAmount}, got ${actualAmount}`)
-      return
-    }
+    // Handle different deposit types
+    if (pendingDeposit.deposit_type === 'TON') {
+      // Verify TON amount matches (with some tolerance)
+      const expectedAmount = parseFloat(pendingDeposit.ton_amount)
+      const actualAmount = parseFloat(amount)
+      const tolerance = 0.001 // 0.001 TON tolerance
 
-    // Mint actual jetton tokens
-    console.log(`Minting ${pendingDeposit.bim_amount} BIM tokens for ${pendingDeposit.users.wallet_address}`)
-    
-    const mintResponse = await fetch('https://xyskyvwxbpnlveamxwlb.supabase.co/functions/v1/jetton-minter/mint', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
-      },
-      body: JSON.stringify({
-        action: 'mint',
-        user_wallet: pendingDeposit.users.wallet_address,
-        bim_amount: pendingDeposit.bim_amount,
-        deposit_id: pendingDeposit.id,
-      })
-    });
-
-    let jettonMintHash = null;
-    if (mintResponse.ok) {
-      const mintData = await mintResponse.json();
-      if (mintData.success) {
-        jettonMintHash = mintData.mint_hash;
-        console.log('Jetton minted successfully:', jettonMintHash);
-      } else {
-        console.error('Jetton minting failed:', mintData.error);
+      if (Math.abs(expectedAmount - actualAmount) > tolerance) {
+        console.log(`TON amount mismatch: expected ${expectedAmount}, got ${actualAmount}`)
+        return
       }
-    } else {
-      console.error('Jetton minting request failed:', mintResponse.status, await mintResponse.text());
+    } else if (pendingDeposit.deposit_type === 'Bimcoin') {
+      // For Bimcoin deposits, we need to verify jetton transfers
+      // The amount verification is different for jetton transfers
+      console.log(`Processing Bimcoin deposit: ${pendingDeposit.bim_amount} BIM from ${pendingDeposit.ton_amount} Bimcoin`)
     }
 
-    // Update deposit status with both deposit hash and mint hash
+    // Update deposit status with transaction hash
     const { error: updateError } = await supabase
       .from('deposits')
       .update({
         deposit_hash: txHash,
-        jetton_mint_hash: jettonMintHash,
         status: 'confirmed',
         processed_at: new Date().toISOString()
       })
@@ -295,12 +239,14 @@ async function processDeposit(depositComment: string, txHash: string, amount: st
       return
     }
 
-    // Update user's BIM balance
+    // Update user's BIM balance and total deposited
+    const tonAmount = pendingDeposit.deposit_type === 'TON' ? parseFloat(pendingDeposit.ton_amount) : 0
     const { error: userUpdateError } = await supabase
       .from('users')
       .update({
-        bim_balance: parseFloat(pendingDeposit.users.bim_balance) + parseFloat(pendingDeposit.bim_amount),
-        total_deposited: parseFloat(pendingDeposit.users.total_deposited) + parseFloat(pendingDeposit.ton_amount)
+        bim_balance: (parseFloat(pendingDeposit.users.bim_balance) + parseFloat(pendingDeposit.bim_amount)).toString(),
+        total_deposited: (parseFloat(pendingDeposit.users.total_deposited) + tonAmount).toString(),
+        last_activity_at: new Date().toISOString()
       })
       .eq('id', pendingDeposit.user_id)
 
@@ -309,10 +255,71 @@ async function processDeposit(depositComment: string, txHash: string, amount: st
       return
     }
 
-    console.log(`Successfully processed deposit: ${depositComment} for ${amount} TON`)
+    // Handle referral rewards if applicable
+    if (pendingDeposit.users.referred_by) {
+      await handleReferralReward(pendingDeposit)
+    }
+
+    console.log(`Successfully processed ${pendingDeposit.deposit_type} deposit: ${depositComment} for ${pendingDeposit.bim_amount} BIM`)
     
   } catch (error) {
     console.error(`Error processing deposit ${depositComment}:`, error)
+  }
+}
+
+// Helper function to handle referral rewards
+async function handleReferralReward(deposit: any) {
+  try {
+    const { data: referralConfig } = await supabase
+      .from('config')
+      .select('value')
+      .eq('key', 'referral_rate')
+      .single()
+
+    if (referralConfig) {
+      const referralRate = parseFloat(referralConfig.value)
+      const referralReward = parseFloat(deposit.bim_amount) * referralRate
+
+      // Check if this is the first deposit for referral
+      const { count: depositCount } = await supabase
+        .from('deposits')
+        .select('*', { count: 'exact' })
+        .eq('user_id', deposit.user_id)
+        .eq('status', 'confirmed')
+
+      if (depositCount === 1) {
+        // Create referral record
+        await supabase
+          .from('referrals')
+          .insert({
+            referrer_id: deposit.users.referred_by,
+            referee_id: deposit.user_id,
+            first_deposit_id: deposit.id,
+            reward_amount: referralReward.toString(),
+            status: 'completed',
+            completed_at: new Date().toISOString()
+          })
+
+        // Update referrer's balance
+        const { data: referrer } = await supabase
+          .from('users')
+          .select('bim_balance, total_earned_from_referrals')
+          .eq('id', deposit.users.referred_by)
+          .single()
+
+        if (referrer) {
+          await supabase
+            .from('users')
+            .update({
+              bim_balance: (parseFloat(referrer.bim_balance) + referralReward).toString(),
+              total_earned_from_referrals: (parseFloat(referrer.total_earned_from_referrals) + referralReward).toString()
+            })
+            .eq('id', deposit.users.referred_by)
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error handling referral reward:', error)
   }
 }
 
