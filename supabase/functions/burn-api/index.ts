@@ -1,5 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { TonClient, WalletContractV4, internal } from 'https://esm.sh/@ton/ton@13.11.1'
+import { mnemonicToWalletKey } from 'https://esm.sh/@ton/crypto@3.2.0'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -176,10 +178,65 @@ serve(async (req) => {
         )
       }
 
-      // Generate a mock TON payout hash for now (in real implementation, this would be from blockchain)
-      const ton_payout_hash = `ton_payout_${Date.now()}_${Math.random().toString(36).substring(7)}`
-
       try {
+        // Initialize TON client and treasury wallet
+        const client = new TonClient({
+          endpoint: 'https://toncenter.com/api/v2/jsonRPC',
+          apiKey: Deno.env.get('TON_CENTER_API_KEY')
+        })
+
+        const adminMnemonic = Deno.env.get('ADMIN_MNEMONIC')
+        if (!adminMnemonic) {
+          throw new Error('ADMIN_MNEMONIC not configured')
+        }
+
+        const keyPair = await mnemonicToWalletKey(adminMnemonic.split(' '))
+        const wallet = WalletContractV4.create({ workchain: 0, publicKey: keyPair.publicKey })
+        const contract = client.open(wallet)
+
+        // Convert TON amount to nanotons (1 TON = 1,000,000,000 nanotons)
+        const nanotons = BigInt(Math.floor(ton_amount * 1_000_000_000))
+
+        console.log(`Preparing to send ${ton_amount} TON (${nanotons} nanotons) to ${wallet_address}`)
+
+        // Create and send the transaction
+        const seqno = await contract.getSeqno()
+        
+        await contract.sendTransfer({
+          secretKey: keyPair.secretKey,
+          seqno: seqno,
+          messages: [
+            internal({
+              to: wallet_address,
+              value: nanotons,
+              body: `BIM burn payout: ${bim_amount} BIM → ${ton_amount} TON`,
+              bounce: false,
+            }),
+          ],
+        })
+
+        // Wait for transaction confirmation
+        let currentSeqno = seqno
+        let attempts = 0
+        const maxAttempts = 30
+
+        while (currentSeqno === seqno && attempts < maxAttempts) {
+          await new Promise(resolve => setTimeout(resolve, 2000))
+          try {
+            currentSeqno = await contract.getSeqno()
+          } catch (error) {
+            console.log(`Seqno check attempt ${attempts + 1} failed:`, error)
+          }
+          attempts++
+        }
+
+        if (currentSeqno === seqno) {
+          throw new Error('Transaction not confirmed within timeout period')
+        }
+
+        const ton_payout_hash = `confirmed_${seqno}_${Date.now()}`
+        console.log(`TON transfer confirmed! Seqno: ${seqno} -> ${currentSeqno}`)
+
         // Start transaction by updating user balances
         const { error: updateError } = await supabase
           .from('users')
@@ -204,7 +261,7 @@ serve(async (req) => {
             jetton_burn_hash: `bim_burn_${Date.now()}_${Math.random().toString(36).substring(7)}`,
             ton_payout_hash: ton_payout_hash,
             processed_at: new Date().toISOString(),
-            payout_processed: true // Mark as processed for TON payouts
+            payout_processed: true
           })
           .select()
           .single()
