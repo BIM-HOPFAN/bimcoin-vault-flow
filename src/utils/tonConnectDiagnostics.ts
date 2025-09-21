@@ -1,7 +1,7 @@
 // Utility to diagnose TON Connect issues
 export const diagnoseTonConnect = async () => {
   const manifestUrl = 'https://db23b08d-08a2-4e7e-b648-6f394e9e12c2.lovableproject.com/tonconnect-manifest.json';
-  const iconUrl = 'https://db23b08d-08a2-4e7e-b648-6f394e9e12c2.lovableproject.com/icon-512x512.png';
+  const iconUrl = 'https://db23b08d-08a2-4e7e-b648-6f394e9e12c2.lovableproject.com/bimcoin-logo.png';
   
   console.log('=== TON Connect Diagnostics ===');
   
