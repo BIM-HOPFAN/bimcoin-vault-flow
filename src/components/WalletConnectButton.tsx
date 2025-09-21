@@ -1,9 +1,31 @@
-import { TonConnectButton, useTonAddress } from '@tonconnect/ui-react';
+import { TonConnectButton, useTonAddress, useTonConnectUI } from '@tonconnect/ui-react';
 import { Button } from '@/components/ui/button';
 import { Wallet } from 'lucide-react';
+import { useEffect } from 'react';
 
 const WalletConnectButton = () => {
   const address = useTonAddress();
+  const [tonConnectUI] = useTonConnectUI();
+
+  // Listen for connection status changes
+  useEffect(() => {
+    const unsubscribe = tonConnectUI.onStatusChange(
+      (wallet) => {
+        if (wallet) {
+          console.log('Wallet connected:', wallet);
+        } else {
+          console.log('Wallet disconnected');
+        }
+      },
+      (error) => {
+        console.error('Status change error:', error);
+      }
+    );
+
+    return () => {
+      unsubscribe();
+    };
+  }, [tonConnectUI]);
 
   const formatAddress = (addr: string) => {
     if (!addr) return '';
