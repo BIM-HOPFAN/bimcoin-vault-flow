@@ -1,4 +1,4 @@
-# BIMCoin TON DeFi Protocol
+# Bimcoin TON DeFi Protocol
 
 A modern React-based decentralized application built on The Open Network (TON) blockchain for earning BIM and OBA tokens through deposits, mining, tasks, and referrals.
 
@@ -6,7 +6,7 @@ A modern React-based decentralized application built on The Open Network (TON) b
 
 ### 🌟 Core Functionality
 - **TON Wallet Integration**: Connect via TonConnect UI with support for Tonkeeper and MyTonWallet
-- **Token Deposits**: Deposit TON to mint BIMCoin tokens (1 TON = 1,000 BIM)
+- **Token Deposits**: Deposit TON to mint Bimcoin tokens (1 TON = 1,000 BIM)
 - **OBA Mining**: Earn 50% OBA tokens daily through passive mining
 - **Task System**: Complete social and trading tasks for 3% OBA daily rewards
 - **Referral Program**: Earn 2% OBA on friend deposits with 365-day activity window
@@ -68,7 +68,7 @@ src/
 
 ## Token Economics
 
-### BIMCoin (BIM)
+### Bimcoin (BIM)
 - **Minting**: 1 TON = 1,000 BIM tokens
 - **Burning**: Convert BIM back to TON (configurable rate)
 - **Usage**: Primary token for ecosystem participation
@@ -84,7 +84,7 @@ src/
 ### Jetton Master
 - **Contract**: `EQBiJdfXqgRRO0asz71X0MBhS8__FY_Kc9bq6d7o-dVDshja`
 - **Standard**: TON Jetton (TEP-74)
-- **Functions**: Mint/burn BIMCoin tokens
+- **Functions**: Mint/burn Bimcoin tokens
 
 ### Treasury Operations
 - **Deposits**: Tracked via comment `BIM:DEPOSIT:<uuid>`

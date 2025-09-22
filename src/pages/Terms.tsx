@@ -21,14 +21,14 @@ const Terms = () => {
           <section className="mb-8">
             <h2 className="text-2xl font-semibold mb-4">1. Acceptance of Terms</h2>
             <p className="mb-4">
-              By accessing and using BIMCoin, you accept and agree to be bound by the terms and provision of this agreement.
+              By accessing and using Bimcoin, you accept and agree to be bound by the terms and provision of this agreement.
             </p>
           </section>
 
           <section className="mb-8">
             <h2 className="text-2xl font-semibold mb-4">2. Description of Service</h2>
             <p className="mb-4">
-              BIMCoin is a decentralized finance (DeFi) protocol built on the TON Network that allows users to earn BIM and OBA tokens through various activities including deposits, mining, and task completion.
+              Bimcoin is a decentralized finance (DeFi) protocol built on the TON Network that allows users to earn BIM and OBA tokens through various activities including deposits, mining, and task completion.
             </p>
           </section>
 
@@ -52,7 +52,7 @@ const Terms = () => {
           <section className="mb-8">
             <h2 className="text-2xl font-semibold mb-4">5. Limitation of Liability</h2>
             <p className="mb-4">
-              BIMCoin is provided "as is" without any warranties. We are not liable for any losses or damages that may occur from using our service.
+              Bimcoin is provided "as is" without any warranties. We are not liable for any losses or damages that may occur from using our service.
             </p>
           </section>
 

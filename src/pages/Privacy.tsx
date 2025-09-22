@@ -21,7 +21,7 @@ const Privacy = () => {
           <section className="mb-8">
             <h2 className="text-2xl font-semibold mb-4">1. Information We Collect</h2>
             <p className="mb-4">
-              BIMCoin is a decentralized application. We collect minimal information necessary to provide our services:
+              Bimcoin is a decentralized application. We collect minimal information necessary to provide our services:
             </p>
             <ul className="list-disc pl-6 mb-4">
               <li>Wallet addresses for transaction processing</li>
