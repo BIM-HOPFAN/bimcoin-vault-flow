@@ -86,13 +86,62 @@ async function startMining(req: Request) {
     .single()
 
   if (activeMining) {
-    return new Response(JSON.stringify({ 
-      error: 'Mining session already active',
-      active_session: activeMining 
-    }), {
-      status: 400,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    })
+    // Check if the session has expired (more than 24 hours)
+    const startTime = new Date(activeMining.start_time).getTime()
+    const now = Date.now()
+    const elapsed = (now - startTime) / 1000
+    const totalDuration = 24 * 60 * 60 // 24 hours
+
+    if (elapsed >= totalDuration) {
+      // Calculate final earnings for expired session
+      const oneYearAgo = new Date()
+      oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1)
+      
+      const { data: expiredSessionDeposits } = await supabase
+        .from('deposits')
+        .select('bim_amount')
+        .eq('user_id', user.id)
+        .eq('status', 'completed')
+        .gte('created_at', oneYearAgo.toISOString())
+
+      const totalActiveBIM = expiredSessionDeposits?.reduce((sum, deposit) => 
+        sum + parseFloat(deposit.bim_amount || '0'), 0
+      ) || 0
+
+      const finalEarnings = totalActiveBIM * 0.5 // 50% of active BIM deposits
+
+      // Mark expired session as completed and award earnings
+      await supabase
+        .from('mining_sessions')
+        .update({
+          status: 'claimed',
+          end_time: new Date().toISOString(),
+          duration_seconds: Math.floor(elapsed),
+          oba_earned: finalEarnings.toString(),
+          claimed_at: new Date().toISOString()
+        })
+        .eq('id', activeMining.id)
+
+      // Update user's OBA balance and total mined
+      await supabase
+        .from('users')
+        .update({
+          oba_balance: (parseFloat(user.oba_balance) + finalEarnings).toString(),
+          total_mined: (parseFloat(user.total_mined) + finalEarnings).toString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', user.id)
+
+      console.log(`Auto-completed expired mining session for user ${user.id}, earned: ${finalEarnings} OBA`)
+    } else {
+      return new Response(JSON.stringify({ 
+        error: 'Mining session already active',
+        active_session: activeMining 
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
+    }
   }
 
   // Check if user has active BIM deposits (365 days)
