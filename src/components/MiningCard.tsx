@@ -183,7 +183,7 @@ const MiningCard = () => {
           OBA Mining
         </CardTitle>
         <CardDescription>
-          Mine OBA tokens at 50% per day. Start mining to earn passive rewards!
+          Mine OBA tokens at 50% per day of your active BIM deposits (valid for 365 days). Start mining to earn passive rewards!
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">

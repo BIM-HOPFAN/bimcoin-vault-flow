@@ -95,6 +95,36 @@ async function startMining(req: Request) {
     })
   }
 
+  // Check if user has active BIM deposits (365 days)
+  const oneYearAgo = new Date()
+  oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1)
+  
+  const { data: activeDeposits, error: depositsError } = await supabase
+    .from('deposits')
+    .select('bim_amount')
+    .eq('user_id', user.id)
+    .eq('status', 'completed')
+    .gte('created_at', oneYearAgo.toISOString())
+
+  if (depositsError) {
+    console.error('Error fetching deposits:', depositsError)
+    return new Response(JSON.stringify({ error: 'Failed to fetch deposits' }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    })
+  }
+
+  const totalActiveBIM = activeDeposits?.reduce((sum, deposit) => 
+    sum + parseFloat(deposit.bim_amount || '0'), 0
+  ) || 0
+
+  if (totalActiveBIM === 0) {
+    return new Response(JSON.stringify({ error: 'No active BIM deposits found. You need BIM deposits from the last 365 days to start mining.' }), {
+      status: 400,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    })
+  }
+
   // Start new mining session
   const { data: miningSession, error: miningError } = await supabase
     .from('mining_sessions')
@@ -160,21 +190,39 @@ async function claimMining(req: Request) {
     })
   }
 
-  // Calculate mining rewards
-  const { data: miningConfig } = await supabase
-    .from('config')
-    .select('value')
-    .eq('key', 'mining_rate_per_second')
-    .single()
+  // Calculate mining rewards based on active BIM deposits (365 days)
+  const oneYearAgo = new Date()
+  oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1)
+  
+  const { data: activeDeposits, error: depositsError } = await supabase
+    .from('deposits')
+    .select('bim_amount')
+    .eq('user_id', user.id)
+    .eq('status', 'completed')
+    .gte('created_at', oneYearAgo.toISOString())
 
-  if (!miningConfig) {
-    return new Response(JSON.stringify({ error: 'Mining rate not configured' }), {
+  if (depositsError) {
+    console.error('Error fetching deposits:', depositsError)
+    return new Response(JSON.stringify({ error: 'Failed to fetch deposits' }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
   }
 
-  const miningRatePerSecond = parseFloat(miningConfig.value)
+  // Calculate total active BIM deposits
+  const totalActiveBIM = activeDeposits?.reduce((sum, deposit) => 
+    sum + parseFloat(deposit.bim_amount || '0'), 0
+  ) || 0
+
+  if (totalActiveBIM === 0) {
+    return new Response(JSON.stringify({ error: 'No active deposits for mining' }), {
+      status: 400,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    })
+  }
+
+  // Calculate 50% per day mining rate: (totalBIM * 0.5) / 86400 seconds
+  const miningRatePerSecond = (totalActiveBIM * 0.5) / 86400
   const startTime = new Date(activeMining.start_time).getTime()
   const endTime = Date.now()
   const durationSeconds = Math.floor((endTime - startTime) / 1000)
@@ -245,15 +293,27 @@ async function getMiningStatus(params: URLSearchParams) {
     .single()
 
   let currentEarnings = 0
+  let totalActiveBIM = 0
+  
   if (activeMining) {
-    const { data: miningConfig } = await supabase
-      .from('config')
-      .select('value')
-      .eq('key', 'mining_rate_per_second')
-      .single()
+    // Calculate active BIM deposits (365 days)
+    const oneYearAgo = new Date()
+    oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1)
+    
+    const { data: activeDeposits } = await supabase
+      .from('deposits')
+      .select('bim_amount')
+      .eq('user_id', user.id)
+      .eq('status', 'completed')
+      .gte('created_at', oneYearAgo.toISOString())
 
-    if (miningConfig) {
-      const miningRatePerSecond = parseFloat(miningConfig.value)
+    totalActiveBIM = activeDeposits?.reduce((sum, deposit) => 
+      sum + parseFloat(deposit.bim_amount || '0'), 0
+    ) || 0
+
+    if (totalActiveBIM > 0) {
+      // Calculate 50% per day mining rate: (totalBIM * 0.5) / 86400 seconds
+      const miningRatePerSecond = (totalActiveBIM * 0.5) / 86400
       const startTime = new Date(activeMining.start_time).getTime()
       const currentTime = Date.now()
       const durationSeconds = Math.floor((currentTime - startTime) / 1000)
@@ -263,7 +323,8 @@ async function getMiningStatus(params: URLSearchParams) {
 
   return new Response(JSON.stringify({
     active_mining: activeMining,
-    current_earnings: currentEarnings
+    current_earnings: currentEarnings,
+    total_active_bim: totalActiveBIM
   }), {
     headers: { ...corsHeaders, 'Content-Type': 'application/json' }
   })
