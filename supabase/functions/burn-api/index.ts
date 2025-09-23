@@ -70,11 +70,12 @@ serve(async (req) => {
       const jetton_burn_hash = `burn_${Date.now()}_${Math.random().toString(36).substring(7)}`
 
       try {
-        // Start transaction by updating user balances
+        // Update user balances directly since this is an OBA conversion
         const { error: updateError } = await supabase
           .from('users')
           .update({
             oba_balance: user.oba_balance - oba_amount,
+            earned_bim_balance: parseFloat(user.earned_bim_balance || '0') + bim_amount,
             bim_balance: user.bim_balance + bim_amount,
             updated_at: new Date().toISOString()
           })
@@ -94,7 +95,9 @@ serve(async (req) => {
             ton_amount: 0, // This will be calculated when burning BIM for TON
             jetton_burn_hash: jetton_burn_hash,
             processed_at: new Date().toISOString(),
-            payout_processed: false
+            payout_processed: false,
+            penalty_amount: 0,
+            burn_type: 'oba_conversion'
           })
           .select()
           .single()
@@ -113,6 +116,21 @@ serve(async (req) => {
           
           throw new Error('Failed to record burn transaction')
         }
+
+        // Create a deposit record for the BIM earned from OBA conversion
+        await supabase
+          .from('deposits')
+          .insert({
+            user_id: user.id,
+            deposit_type: 'OBA_Conversion',
+            source_type: 'oba_conversion',
+            ton_amount: 0,
+            bim_amount: bim_amount,
+            oba_reward: 0,
+            status: 'completed',
+            processed_at: new Date().toISOString(),
+            deposit_comment: `OBA to BIM conversion: ${oba_amount} OBA → ${bim_amount} BIM`
+          })
 
         console.log(`OBA burn successful: ${oba_amount} OBA → ${bim_amount} BIM for user ${wallet_address}`)
 
@@ -138,7 +156,7 @@ serve(async (req) => {
       }
     }
 
-    // Burn BIM for TON
+    // Burn BIM for TON with penalty logic
     if (req.method === 'POST' && path === '/burn-bim') {
       const { wallet_address, bim_amount } = await req.json()
 
@@ -149,8 +167,9 @@ serve(async (req) => {
         )
       }
 
-      // Exchange rate: 1 BIM = 0.005 TON (200 BIM = 1 TON)
-      const ton_amount = bim_amount / 200
+      const burnAmount = parseFloat(bim_amount)
+      // Exchange rate: 1000 BIM = 1 TON
+      const tonAmount = burnAmount * 0.001
 
       // Get user
       const { data: user, error: userError } = await supabase
@@ -167,15 +186,46 @@ serve(async (req) => {
         )
       }
 
-      // Check if user has enough BIM
-      if (user.bim_balance < bim_amount) {
+      // Check if user has enough BIM balance
+      if (parseFloat(user.bim_balance) < burnAmount) {
         return new Response(
           JSON.stringify({ 
             success: false, 
-            error: `Insufficient BIM balance. Available: ${user.bim_balance}, Required: ${bim_amount}` 
+            error: `Insufficient BIM balance. Available: ${user.bim_balance}, Required: ${burnAmount}` 
           }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
+      }
+
+      // Determine burn type and calculate penalty
+      const depositBimBalance = parseFloat(user.deposit_bim_balance || '0')
+      const earnedBimBalance = parseFloat(user.earned_bim_balance || '0')
+      
+      let burnType = 'earned_bim'
+      let penaltyAmount = 0
+      let finalBurnAmount = burnAmount
+      let actualTonAmount = tonAmount
+
+      // If burning more than earned BIM, we're burning from deposits (penalty applies)
+      if (burnAmount > earnedBimBalance) {
+        const depositBurnAmount = burnAmount - earnedBimBalance
+        
+        if (depositBurnAmount > depositBimBalance) {
+          return new Response(
+            JSON.stringify({ 
+              success: false, 
+              error: 'Insufficient deposit BIM balance' 
+            }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          )
+        }
+
+        // Apply 50% penalty to deposit BIM being burned
+        penaltyAmount = depositBurnAmount * 0.5
+        actualTonAmount = tonAmount * (1 - (penaltyAmount / burnAmount))
+        burnType = 'deposit_bim'
+        
+        console.log(`Burning deposit BIM with penalty: ${depositBurnAmount} BIM, penalty: ${penaltyAmount}, final TON: ${actualTonAmount}`)
       }
 
       try {
@@ -224,10 +274,11 @@ serve(async (req) => {
           throw new Error('Unable to verify treasury wallet state')
         }
 
-        // Convert TON amount to nanotons (1 TON = 1,000,000,000 nanotons)
-        const nanotons = BigInt(Math.floor(ton_amount * 1_000_000_000))
-
-        console.log(`Preparing to send ${ton_amount} TON (${nanotons} nanotons) to ${wallet_address}`)
+        // Send TON to user's wallet (after penalty deduction)
+        let ton_amount = actualTonAmount
+        const recipientAddress = wallet_address
+        
+        console.log(`Preparing to send ${ton_amount} TON (${BigInt(Math.floor(ton_amount * 1_000_000_000))} nanotons) to ${recipientAddress}`)
 
         // Get sequence number and send transaction
         const seqno = await contract.getSeqno()
@@ -238,9 +289,9 @@ serve(async (req) => {
           seqno: seqno,
           messages: [
             internal({
-              to: wallet_address,
-              value: nanotons,
-              body: `BIM burn payout: ${bim_amount} BIM → ${ton_amount} TON`,
+              to: recipientAddress,
+              value: BigInt(Math.floor(ton_amount * 1_000_000_000)),
+              body: `BIM burn payout: ${burnAmount} BIM → ${ton_amount} TON`,
               bounce: false,
             }),
           ],
@@ -305,16 +356,18 @@ serve(async (req) => {
           console.error('CRITICAL: TON sent but failed to record transaction in database')
         }
 
-        console.log(`BIM burn successful: ${bim_amount} BIM → ${ton_amount} TON for user ${wallet_address}`)
+        console.log(`BIM burn successful: ${burnAmount} BIM → ${actualTonAmount} TON for user ${wallet_address}`)
 
         return new Response(
           JSON.stringify({
             success: true,
             burn_id: burnRecord?.id || 'unknown',
-            bim_burned: bim_amount,
-            ton_received: ton_amount,
+            bim_burned: burnAmount,
+            ton_received: actualTonAmount,
+            penalty_amount: penaltyAmount,
+            burn_type: burnType,
             ton_payout_hash: ton_payout_hash,
-            new_bim_balance: user.bim_balance - bim_amount
+            new_bim_balance: parseFloat(user.bim_balance) - burnAmount
           }),
           { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
@@ -369,7 +422,93 @@ serve(async (req) => {
         )
       }
 
-      // Get burn history
+    // Get burn preview with penalty calculation
+    if (req.method === 'POST' && path === '/preview') {
+      const { wallet_address, bim_amount } = await req.json()
+
+      if (!wallet_address || !bim_amount) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Missing required parameters' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      const burnAmount = parseFloat(bim_amount)
+
+      if (burnAmount <= 0) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Invalid burn amount' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      // Get user data
+      const { data: user, error: userError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('wallet_address', wallet_address)
+        .single()
+
+      if (userError || !user) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'User not found' }),
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      // Check if user has enough BIM balance
+      if (parseFloat(user.bim_balance) < burnAmount) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Insufficient BIM balance' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      // Calculate penalty and final amounts
+      const depositBimBalance = parseFloat(user.deposit_bim_balance || '0')
+      const earnedBimBalance = parseFloat(user.earned_bim_balance || '0')
+      
+      let penaltyAmount = 0
+      let burnType = 'earned_bim'
+      let tonAmount = burnAmount * 0.001 // 1000 BIM = 1 TON
+      let finalTonAmount = tonAmount
+
+      // If burning more than earned BIM, we're burning from deposits (penalty applies)
+      if (burnAmount > earnedBimBalance) {
+        const depositBurnAmount = burnAmount - earnedBimBalance
+        
+        if (depositBurnAmount > depositBimBalance) {
+          return new Response(
+            JSON.stringify({ success: false, error: 'Insufficient deposit BIM balance' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          )
+        }
+
+        // Apply 50% penalty to deposit BIM being burned
+        penaltyAmount = depositBurnAmount * 0.5
+        finalTonAmount = tonAmount * (1 - (penaltyAmount / burnAmount))
+        burnType = 'deposit_bim'
+      }
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          preview: {
+            burn_amount: burnAmount,
+            burn_type: burnType,
+            penalty_amount: penaltyAmount,
+            original_ton_amount: tonAmount,
+            final_ton_amount: finalTonAmount,
+            penalty_percentage: burnType === 'deposit_bim' ? 50 : 0,
+            deposit_bim_balance: depositBimBalance,
+            earned_bim_balance: earnedBimBalance
+          }
+        }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // Get burn history
       const { data: burns, error: burnsError } = await supabase
         .from('burns')
         .select('*')

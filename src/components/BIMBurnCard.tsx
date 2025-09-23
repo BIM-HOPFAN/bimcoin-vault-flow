@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,6 +19,8 @@ export const BIMBurnCard: React.FC<BIMBurnCardProps> = ({
 }) => {
   const [burnAmount, setBurnAmount] = useState<string>('');
   const [loading, setLoading] = useState(false);
+  const [burnPreview, setBurnPreview] = useState<any>(null);
+  const [showPenaltyWarning, setShowPenaltyWarning] = useState(false);
   const address = useTonAddress();
   const { toast } = useToast();
 
@@ -86,7 +88,40 @@ export const BIMBurnCard: React.FC<BIMBurnCardProps> = ({
     setBurnAmount(bimBalance.toString());
   };
 
-  const tonReceived = parseFloat(burnAmount) / 200 || 0;
+  // Get burn preview when amount changes
+  const getBurnPreview = async (amount: string) => {
+    if (!address || !amount || parseFloat(amount) <= 0) {
+      setBurnPreview(null);
+      setShowPenaltyWarning(false);
+      return;
+    }
+
+    try {
+      const preview = await bimCoinAPI.getBurnPreview(address, parseFloat(amount));
+      if (preview.success) {
+        setBurnPreview(preview.preview);
+        setShowPenaltyWarning(preview.preview.penalty_amount > 0);
+      } else {
+        setBurnPreview(null);
+        setShowPenaltyWarning(false);
+      }
+    } catch (error) {
+      console.error('Failed to get burn preview:', error);
+      setBurnPreview(null);
+      setShowPenaltyWarning(false);
+    }
+  };
+
+  // Debounced preview update
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      getBurnPreview(burnAmount);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [burnAmount, address]);
+
+  const tonReceived = parseFloat(burnAmount) * 0.001 || 0;
 
   return (
     <Card className="enhanced-card">
@@ -129,15 +164,45 @@ export const BIMBurnCard: React.FC<BIMBurnCardProps> = ({
 
         <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
           <span className="text-sm font-medium">Exchange Rate:</span>
-          <span className="text-sm text-muted-foreground">200 BIM = 1 TON</span>
+          <span className="text-sm text-muted-foreground">1000 BIM = 1 TON</span>
         </div>
+        
+        {showPenaltyWarning && burnPreview && (
+          <div className="space-y-2 p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
+            <div className="flex items-center gap-2 text-destructive">
+              <span className="text-sm font-medium">⚠️ Early Burn Penalty</span>
+            </div>
+            <div className="text-xs text-muted-foreground space-y-1">
+              <div>Deposit BIM Balance: {burnPreview.deposit_bim_balance.toFixed(4)} BIM</div>
+              <div>Earned BIM Balance: {burnPreview.earned_bim_balance.toFixed(4)} BIM</div>
+              <div>Penalty Amount: {burnPreview.penalty_amount.toFixed(4)} BIM (50%)</div>
+            </div>
+          </div>
+        )}
 
-        {burnAmount && tonReceived > 0 && (
+        {burnAmount && (
           <div className="flex items-center justify-between p-3 bg-primary/5 rounded-lg border border-primary/20">
             <div className="flex items-center gap-2">
               <span className="font-medium">{parseFloat(burnAmount).toFixed(6)} BIM</span>
               <ArrowRight className="w-4 h-4 text-muted-foreground" />
-              <span className="font-medium text-primary">{tonReceived.toFixed(6)} TON</span>
+              <div className="text-right">
+                {burnPreview ? (
+                  <>
+                    {showPenaltyWarning && (
+                      <div className="text-sm text-muted-foreground line-through">
+                        {burnPreview.original_ton_amount.toFixed(6)} TON
+                      </div>
+                    )}
+                    <div className="font-medium text-primary">
+                      {burnPreview.final_ton_amount.toFixed(6)} TON
+                    </div>
+                  </>
+                ) : (
+                  <span className="font-medium text-primary">
+                    {(parseFloat(burnAmount) * 0.001).toFixed(6)} TON
+                  </span>
+                )}
+              </div>
             </div>
           </div>
         )}

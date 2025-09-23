@@ -184,6 +184,16 @@ export class BimCoinAPI {
     })
     return await response.json()
   }
+
+  // Get burn preview with penalty calculation
+  async getBurnPreview(walletAddress: string, bimAmount: number) {
+    const response = await fetch(`${this.baseUrl}/burn-api/preview`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ wallet_address: walletAddress, bim_amount: bimAmount })
+    })
+    return await response.json()
+  }
 }
 
 export const bimCoinAPI = new BimCoinAPI()

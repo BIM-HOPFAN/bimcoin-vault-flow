@@ -94,19 +94,11 @@ async function startMining(req: Request) {
 
     if (elapsed >= totalDuration) {
       // Calculate final earnings for expired session
-      const oneYearAgo = new Date()
-      oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1)
-      
-      const { data: expiredSessionDeposits } = await supabase
-        .from('deposits')
-        .select('bim_amount')
-        .eq('user_id', user.id)
-        .eq('status', 'completed')
-        .gte('created_at', oneYearAgo.toISOString())
+      // Get active deposit BIM balance for expired session calculation
+      const { data: activeBimResult } = await supabase
+        .rpc('get_active_deposit_bim', { user_uuid: user.id })
 
-      const totalActiveBIM = expiredSessionDeposits?.reduce((sum, deposit) => 
-        sum + parseFloat(deposit.bim_amount || '0'), 0
-      ) || 0
+      const totalActiveBIM = activeBimResult || 0
 
       const finalEarnings = totalActiveBIM * 0.5 // 50% of active BIM deposits
 
@@ -144,28 +136,11 @@ async function startMining(req: Request) {
     }
   }
 
-  // Check if user has active BIM deposits (365 days)
-  const oneYearAgo = new Date()
-  oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1)
-  
-  const { data: activeDeposits, error: depositsError } = await supabase
-    .from('deposits')
-    .select('bim_amount')
-    .eq('user_id', user.id)
-    .eq('status', 'completed')
-    .gte('created_at', oneYearAgo.toISOString())
+  // Get current active deposit BIM balance using database function
+  const { data: activeBimResult } = await supabase
+    .rpc('get_active_deposit_bim', { user_uuid: user.id })
 
-  if (depositsError) {
-    console.error('Error fetching deposits:', depositsError)
-    return new Response(JSON.stringify({ error: 'Failed to fetch deposits' }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    })
-  }
-
-  const totalActiveBIM = activeDeposits?.reduce((sum, deposit) => 
-    sum + parseFloat(deposit.bim_amount || '0'), 0
-  ) || 0
+  const totalActiveBIM = activeBimResult || 0
 
   if (totalActiveBIM === 0) {
     return new Response(JSON.stringify({ error: 'No active BIM deposits found. You need BIM deposits from the last 365 days to start mining.' }), {
@@ -239,29 +214,11 @@ async function claimMining(req: Request) {
     })
   }
 
-  // Calculate mining rewards based on active BIM deposits (365 days)
-  const oneYearAgo = new Date()
-  oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1)
-  
-  const { data: activeDeposits, error: depositsError } = await supabase
-    .from('deposits')
-    .select('bim_amount')
-    .eq('user_id', user.id)
-    .eq('status', 'completed')
-    .gte('created_at', oneYearAgo.toISOString())
+  // Calculate mining rewards based on current active deposit BIM balance (50% per day)
+  const { data: activeBimResult } = await supabase
+    .rpc('get_active_deposit_bim', { user_uuid: user.id })
 
-  if (depositsError) {
-    console.error('Error fetching deposits:', depositsError)
-    return new Response(JSON.stringify({ error: 'Failed to fetch deposits' }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    })
-  }
-
-  // Calculate total active BIM deposits
-  const totalActiveBIM = activeDeposits?.reduce((sum, deposit) => 
-    sum + parseFloat(deposit.bim_amount || '0'), 0
-  ) || 0
+  const totalActiveBIM = activeBimResult || 0
 
   if (totalActiveBIM === 0) {
     return new Response(JSON.stringify({ error: 'No active deposits for mining' }), {
@@ -345,20 +302,11 @@ async function getMiningStatus(params: URLSearchParams) {
   let totalActiveBIM = 0
   
   if (activeMining) {
-    // Calculate active BIM deposits (365 days)
-    const oneYearAgo = new Date()
-    oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1)
-    
-    const { data: activeDeposits } = await supabase
-      .from('deposits')
-      .select('bim_amount')
-      .eq('user_id', user.id)
-      .eq('status', 'completed')
-      .gte('created_at', oneYearAgo.toISOString())
+    // Get current active deposit BIM balance for earnings calculation
+    const { data: activeBimResult } = await supabase
+      .rpc('get_active_deposit_bim', { user_uuid: user.id })
 
-    totalActiveBIM = activeDeposits?.reduce((sum, deposit) => 
-      sum + parseFloat(deposit.bim_amount || '0'), 0
-    ) || 0
+    const totalActiveBIM = activeBimResult || 0
 
     if (totalActiveBIM > 0) {
       // Calculate 50% per day mining rate: (totalBIM * 0.5) / 86400 seconds
