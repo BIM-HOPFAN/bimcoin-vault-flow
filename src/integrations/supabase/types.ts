@@ -17,10 +17,12 @@ export type Database = {
       burns: {
         Row: {
           bim_amount: number
+          burn_type: string
           created_at: string | null
           id: string
           jetton_burn_hash: string
           payout_processed: boolean | null
+          penalty_amount: number | null
           processed_at: string | null
           ton_amount: number
           ton_payout_hash: string | null
@@ -28,10 +30,12 @@ export type Database = {
         }
         Insert: {
           bim_amount: number
+          burn_type?: string
           created_at?: string | null
           id?: string
           jetton_burn_hash: string
           payout_processed?: boolean | null
+          penalty_amount?: number | null
           processed_at?: string | null
           ton_amount: number
           ton_payout_hash?: string | null
@@ -39,10 +43,12 @@ export type Database = {
         }
         Update: {
           bim_amount?: number
+          burn_type?: string
           created_at?: string | null
           id?: string
           jetton_burn_hash?: string
           payout_processed?: boolean | null
+          penalty_amount?: number | null
           processed_at?: string | null
           ton_amount?: number
           ton_payout_hash?: string | null
@@ -90,6 +96,7 @@ export type Database = {
           jetton_mint_hash: string | null
           oba_reward: number | null
           processed_at: string | null
+          source_type: string
           status: Database["public"]["Enums"]["deposit_status"] | null
           ton_amount: number
           updated_at: string | null
@@ -105,6 +112,7 @@ export type Database = {
           jetton_mint_hash?: string | null
           oba_reward?: number | null
           processed_at?: string | null
+          source_type?: string
           status?: Database["public"]["Enums"]["deposit_status"] | null
           ton_amount: number
           updated_at?: string | null
@@ -120,6 +128,7 @@ export type Database = {
           jetton_mint_hash?: string | null
           oba_reward?: number | null
           processed_at?: string | null
+          source_type?: string
           status?: Database["public"]["Enums"]["deposit_status"] | null
           ton_amount?: number
           updated_at?: string | null
@@ -325,6 +334,8 @@ export type Database = {
         Row: {
           bim_balance: number
           created_at: string | null
+          deposit_bim_balance: number
+          earned_bim_balance: number
           id: string
           is_active: boolean | null
           last_activity_at: string | null
@@ -341,6 +352,8 @@ export type Database = {
         Insert: {
           bim_balance?: number
           created_at?: string | null
+          deposit_bim_balance?: number
+          earned_bim_balance?: number
           id?: string
           is_active?: boolean | null
           last_activity_at?: string | null
@@ -357,6 +370,8 @@ export type Database = {
         Update: {
           bim_balance?: number
           created_at?: string | null
+          deposit_bim_balance?: number
+          earned_bim_balance?: number
           id?: string
           is_active?: boolean | null
           last_activity_at?: string | null
@@ -385,7 +400,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_active_deposit_bim: {
+        Args: { user_uuid: string }
+        Returns: number
+      }
     }
     Enums: {
       deposit_status: "pending" | "confirmed" | "failed"
