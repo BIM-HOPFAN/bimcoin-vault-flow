@@ -101,7 +101,8 @@ async function checkDeposits() {
         throw new Error(`TON Center API error: ${response.status}`)
       }
     } catch (tonCenterError) {
-      console.log(`TON Center API failed: ${tonCenterError.message}`)
+      const errorObj = tonCenterError as Error
+      console.log(`TON Center API failed: ${errorObj.message}`)
       
       // Fallback to TonAPI.io
       try {
@@ -118,7 +119,7 @@ async function checkDeposits() {
           const tonApiData = await fallbackResponse.json()
           // Convert TonAPI format to TON Center format
           data = {
-            result: tonApiData.transactions?.map(tx => ({
+            result: tonApiData.transactions?.map((tx: any) => ({
               hash: tx.hash,
               in_msg: tx.in_msg ? {
                 message: tx.in_msg.decoded_body?.text || tx.in_msg.raw_body
@@ -132,7 +133,9 @@ async function checkDeposits() {
           throw new Error(`TonAPI.io error: ${fallbackResponse.status}`)
         }
       } catch (tonApiError) {
-        console.log(`Both APIs failed. TON Center: ${tonCenterError.message}, TonAPI: ${tonApiError.message}`)
+        const tonCenterErrorObj = tonCenterError as Error
+        const tonApiErrorObj = tonApiError as Error
+        console.log(`Both APIs failed. TON Center: ${tonCenterErrorObj.message}, TonAPI: ${tonApiErrorObj.message}`)
         // Return success with no processed deposits rather than failing completely
         return new Response(JSON.stringify({
           success: true,
@@ -174,17 +177,18 @@ async function checkDeposits() {
     
     console.log(`Processed ${processedCount} verified deposits`)
     return new Response(JSON.stringify({
-      success: true,  
+      success: true,
       processed_deposits: processedCount,
-      checked_transactions: pendingDeposits?.length || 0,
-      api_used: 'app_level'
+      checked_transactions: data?.result?.length || 0,
+      api_used: apiUsed
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
 
   } catch (error) {
     console.error('Error checking deposits:', error)
-    return new Response(JSON.stringify({ error: error.message }), {
+    const errorObj = error as Error
+    return new Response(JSON.stringify({ error: errorObj.message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
@@ -339,7 +343,8 @@ async function checkBurns() {
 
   } catch (error) {
     console.error('Error checking burns:', error)
-    return new Response(JSON.stringify({ error: error.message }), {
+    const errorObj = error as Error
+    return new Response(JSON.stringify({ error: errorObj.message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
@@ -403,7 +408,8 @@ async function processMint(req: Request) {
 
   } catch (error) {
     console.error('Error processing mint:', error)
-    return new Response(JSON.stringify({ error: error.message }), {
+    const errorObj = error as Error
+    return new Response(JSON.stringify({ error: errorObj.message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
@@ -483,7 +489,8 @@ async function getBalance(params: URLSearchParams) {
         }
       }
     } catch (jettonError) {
-      console.log(`Failed to fetch real Bimcoin balance: ${jettonError.message}`)
+      const errorObj = jettonError as Error
+      console.log(`Failed to fetch real Bimcoin balance: ${errorObj.message}`)
       // Continue with 0 balance if jetton balance fetch fails
     }
 
@@ -498,7 +505,8 @@ async function getBalance(params: URLSearchParams) {
 
   } catch (error) {
     console.error('Error getting balance:', error)
-    return new Response(JSON.stringify({ error: error.message }), {
+    const errorObj = error as Error
+    return new Response(JSON.stringify({ error: errorObj.message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })

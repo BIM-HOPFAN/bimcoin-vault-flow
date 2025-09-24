@@ -370,7 +370,8 @@ async function reprocessDeposit(req: Request) {
 
   } catch (error) {
     console.error('Error reprocessing deposit:', error)
-    return new Response(JSON.stringify({ error: error.message }), {
+    const errorObj = error as Error
+    return new Response(JSON.stringify({ error: errorObj.message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
