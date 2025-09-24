@@ -69,7 +69,8 @@ Deno.serve(async (req) => {
     })
   } catch (error) {
     console.error('Error in task-api function:', error)
-    return new Response(JSON.stringify({ error: error.message }), {
+    const errorObj = error as Error
+    return new Response(JSON.stringify({ error: errorObj.message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
@@ -333,12 +334,12 @@ async function completeTaskWithVerification(req: Request) {
       verification_type: task.verification_type,
       verification_attempt: verification_data || {},
       success: verificationResult.success,
-      error_message: verificationResult.error || null
+      error_message: 'error' in verificationResult ? verificationResult.error : null
     })
 
   if (!verificationResult.success) {
     return new Response(JSON.stringify({ 
-      error: verificationResult.error || 'Task verification failed' 
+      error: 'error' in verificationResult ? verificationResult.error : 'Task verification failed' 
     }), {
       status: 400,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -485,7 +486,7 @@ async function verifyTaskCompletion(req: Request) {
   
   return new Response(JSON.stringify({
     success: verificationResult.success,
-    error: verificationResult.error,
+    error: 'error' in verificationResult ? verificationResult.error : undefined,
     verification_type: task.verification_type
   }), {
     headers: { ...corsHeaders, 'Content-Type': 'application/json' }

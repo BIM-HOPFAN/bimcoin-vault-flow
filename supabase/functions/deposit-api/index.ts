@@ -46,7 +46,8 @@ Deno.serve(async (req) => {
     })
   } catch (error) {
     console.error('Error in deposit-api function:', error)
-    return new Response(JSON.stringify({ error: error.message }), {
+    const errorObj = error as Error
+    return new Response(JSON.stringify({ error: errorObj.message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })

@@ -13,7 +13,7 @@ import {
   SendMode,
   toNano,
   Dictionary 
-} from 'https://esm.sh/@ton/core@0.59.0'
+} from 'https://esm.sh/@ton/core@0.61.0'
 import { mnemonicToWalletKey } from 'https://esm.sh/@ton/crypto@3.3.0'
 import { TonClient } from 'https://esm.sh/@ton/ton@15.3.1'
 
@@ -65,7 +65,8 @@ Deno.serve(async (req) => {
     })
   } catch (error) {
     console.error('Error in jetton-minter function:', error)
-    return new Response(JSON.stringify({ error: error.message }), {
+    const errorObj = error as Error
+    return new Response(JSON.stringify({ error: errorObj.message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
@@ -84,10 +85,12 @@ async function deployJettonMinter() {
     const jettonContentDict = Dictionary.empty(Dictionary.Keys.BigUint(256), Dictionary.Values.Cell())
     
     // Add metadata fields with proper TEP-64 keys
-    const nameKey = BigInt('0x' + Buffer.from('name').toString('hex').padStart(64, '0'))
-    const symbolKey = BigInt('0x' + Buffer.from('symbol').toString('hex').padStart(64, '0'))
-    const decimalsKey = BigInt('0x' + Buffer.from('decimals').toString('hex').padStart(64, '0'))
-    const imageKey = BigInt('0x' + Buffer.from('image').toString('hex').padStart(64, '0'))
+    // Using TextEncoder instead of Buffer for Deno compatibility
+    const textEncoder = new TextEncoder()
+    const nameKey = BigInt('0x' + Array.from(textEncoder.encode('name')).map(b => b.toString(16).padStart(2, '0')).join('').padStart(64, '0'))
+    const symbolKey = BigInt('0x' + Array.from(textEncoder.encode('symbol')).map(b => b.toString(16).padStart(2, '0')).join('').padStart(64, '0'))
+    const decimalsKey = BigInt('0x' + Array.from(textEncoder.encode('decimals')).map(b => b.toString(16).padStart(2, '0')).join('').padStart(64, '0'))
+    const imageKey = BigInt('0x' + Array.from(textEncoder.encode('image')).map(b => b.toString(16).padStart(2, '0')).join('').padStart(64, '0'))
     
     jettonContentDict.set(nameKey, beginCell().storeUint(0, 8).storeStringTail('Bimcoin').endCell())
     jettonContentDict.set(symbolKey, beginCell().storeUint(0, 8).storeStringTail('BIM').endCell())
@@ -135,7 +138,8 @@ async function deployJettonMinter() {
 
   } catch (error) {
     console.error('Error deploying minter:', error)
-    return new Response(JSON.stringify({ error: error.message }), {
+    const errorObj = error as Error
+    return new Response(JSON.stringify({ error: errorObj.message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
@@ -174,9 +178,8 @@ async function mintTokens(req: Request) {
     }
 
     // Import TON SDK
-    const { TonClient, WalletContractV4, internal } = await import('https://esm.sh/@ton/ton@15.3.1')
+    const { WalletContractV4 } = await import('https://esm.sh/@ton/ton@15.3.1')
     const { mnemonicToPrivateKey } = await import('https://esm.sh/@ton/crypto@3.3.0')
-    const { Address, beginCell, toNano } = await import('https://esm.sh/@ton/core@0.61.0')
 
     // Initialize TON client
     const client = new TonClient({
@@ -248,7 +251,8 @@ async function mintTokens(req: Request) {
 
   } catch (error) {
     console.error('Error minting tokens:', error)
-    return new Response(JSON.stringify({ error: error.message }), {
+    const errorObj = error as Error
+    return new Response(JSON.stringify({ error: errorObj.message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
@@ -289,7 +293,8 @@ async function getMinterInfo() {
 
   } catch (error) {
     console.error('Error getting minter info:', error)
-    return new Response(JSON.stringify({ error: error.message }), {
+    const errorObj = error as Error
+    return new Response(JSON.stringify({ error: errorObj.message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })

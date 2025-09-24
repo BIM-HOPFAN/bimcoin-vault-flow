@@ -1,7 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { TonClient, WalletContractV4, internal } from 'https://esm.sh/@ton/ton@13.11.1'
-import { mnemonicToWalletKey } from 'https://esm.sh/@ton/crypto@3.2.0'
+import { TonClient, WalletContractV4, internal } from 'https://esm.sh/@ton/ton@15.3.1'
+import { mnemonicToWalletKey } from 'https://esm.sh/@ton/crypto@3.3.0'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -261,6 +261,10 @@ serve(async (req) => {
         const contract = client.open(wallet)
 
         // Check wallet balance first
+        // Send TON to user's wallet (after penalty deduction)
+        let ton_amount = actualTonAmount
+        const recipientAddress = wallet_address
+        
         try {
           const balance = await contract.getBalance()
           const balanceInTon = Number(balance) / 1_000_000_000
@@ -273,10 +277,6 @@ serve(async (req) => {
           console.error('Failed to check treasury balance:', balanceError)
           throw new Error('Unable to verify treasury wallet state')
         }
-
-        // Send TON to user's wallet (after penalty deduction)
-        let ton_amount = actualTonAmount
-        const recipientAddress = wallet_address
         
         console.log(`Preparing to send ${ton_amount} TON (${BigInt(Math.floor(ton_amount * 1_000_000_000))} nanotons) to ${recipientAddress}`)
 
@@ -376,12 +376,13 @@ serve(async (req) => {
         console.error('BIM burn transaction error:', error)
         
         // Return more specific error message
+        const errorObj = error as Error
         let errorMessage = 'Failed to process burn transaction'
-        if (error.message.includes('Insufficient treasury balance')) {
+        if (errorObj.message?.includes('Insufficient treasury balance')) {
           errorMessage = 'Treasury wallet has insufficient balance'
-        } else if (error.message.includes('ADMIN_MNEMONIC not configured')) {
+        } else if (errorObj.message?.includes('ADMIN_MNEMONIC not configured')) {
           errorMessage = 'Treasury wallet not configured'
-        } else if (error.message.includes('Transaction not confirmed')) {
+        } else if (errorObj.message?.includes('Transaction not confirmed')) {
           errorMessage = 'TON network transaction failed - your BIM was not deducted'
         }
 
@@ -389,7 +390,7 @@ serve(async (req) => {
           JSON.stringify({ 
             success: false, 
             error: errorMessage,
-            details: error.message 
+            details: errorObj.message 
           }),
           { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
@@ -422,93 +423,7 @@ serve(async (req) => {
         )
       }
 
-    // Get burn preview with penalty calculation
-    if (req.method === 'POST' && path === '/preview') {
-      const { wallet_address, bim_amount } = await req.json()
-
-      if (!wallet_address || !bim_amount) {
-        return new Response(
-          JSON.stringify({ success: false, error: 'Missing required parameters' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        )
-      }
-
-      const burnAmount = parseFloat(bim_amount)
-
-      if (burnAmount <= 0) {
-        return new Response(
-          JSON.stringify({ success: false, error: 'Invalid burn amount' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        )
-      }
-
-      // Get user data
-      const { data: user, error: userError } = await supabase
-        .from('users')
-        .select('*')
-        .eq('wallet_address', wallet_address)
-        .single()
-
-      if (userError || !user) {
-        return new Response(
-          JSON.stringify({ success: false, error: 'User not found' }),
-          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        )
-      }
-
-      // Check if user has enough BIM balance
-      if (parseFloat(user.bim_balance) < burnAmount) {
-        return new Response(
-          JSON.stringify({ success: false, error: 'Insufficient BIM balance' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        )
-      }
-
-      // Calculate penalty and final amounts
-      const depositBimBalance = parseFloat(user.deposit_bim_balance || '0')
-      const earnedBimBalance = parseFloat(user.earned_bim_balance || '0')
-      
-      let penaltyAmount = 0
-      let burnType = 'earned_bim'
-      let tonAmount = burnAmount * 0.001 // 1000 BIM = 1 TON
-      let finalTonAmount = tonAmount
-
-      // If burning more than earned BIM, we're burning from deposits (penalty applies)
-      if (burnAmount > earnedBimBalance) {
-        const depositBurnAmount = burnAmount - earnedBimBalance
-        
-        if (depositBurnAmount > depositBimBalance) {
-          return new Response(
-            JSON.stringify({ success: false, error: 'Insufficient deposit BIM balance' }),
-            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          )
-        }
-
-        // Apply 50% penalty to deposit BIM being burned
-        penaltyAmount = depositBurnAmount * 0.5
-        finalTonAmount = tonAmount * (1 - (penaltyAmount / burnAmount))
-        burnType = 'deposit_bim'
-      }
-
-      return new Response(
-        JSON.stringify({
-          success: true,
-          preview: {
-            burn_amount: burnAmount,
-            burn_type: burnType,
-            penalty_amount: penaltyAmount,
-            original_ton_amount: tonAmount,
-            final_ton_amount: finalTonAmount,
-            penalty_percentage: burnType === 'deposit_bim' ? 50 : 0,
-            deposit_bim_balance: depositBimBalance,
-            earned_bim_balance: earnedBimBalance
-          }
-        }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
-
-    // Get burn history
+      // Get burn history
       const { data: burns, error: burnsError } = await supabase
         .from('burns')
         .select('*')
@@ -527,9 +442,9 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({
           success: true,
-          burns: burns || []
+          burns: burns
         }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
@@ -540,8 +455,9 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('Burn API error:', error)
+    const errorObj = error as Error
     return new Response(
-      JSON.stringify({ success: false, error: 'Internal server error' }),
+      JSON.stringify({ success: false, error: 'Internal server error', details: errorObj.message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }

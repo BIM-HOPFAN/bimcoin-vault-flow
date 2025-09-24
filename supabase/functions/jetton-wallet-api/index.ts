@@ -42,7 +42,8 @@ Deno.serve(async (req) => {
     })
   } catch (error) {
     console.error('Error in jetton-wallet-api function:', error)
-    return new Response(JSON.stringify({ error: error.message }), {
+    const errorObj = error as Error
+    return new Response(JSON.stringify({ error: errorObj.message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
@@ -94,9 +95,9 @@ async function deriveJettonWallet(req: Request) {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         })
       }
-    } catch (error) {
-      console.log('TonCenter API failed:', error.message)
-    }
+  } catch (error) {
+    console.error('TonCenter API failed:', (error as Error).message)
+  }
 
     // Method 2: Use mathematical derivation as fallback
     try {
@@ -140,7 +141,7 @@ async function deriveJettonWallet(req: Request) {
       })
       
     } catch (error) {
-      console.log('Mathematical derivation failed:', error.message)
+      console.log('Mathematical derivation failed:', (error as Error).message)
     }
 
     // Method 3: Try alternative TonCenter format
@@ -177,7 +178,7 @@ async function deriveJettonWallet(req: Request) {
         })
       }
     } catch (error) {
-      console.log('Alternative TonCenter format failed:', error.message)
+      console.log('Alternative TonCenter format failed:', (error as Error).message)
     }
     
     throw new Error('All methods failed to derive jetton wallet address')
@@ -187,7 +188,7 @@ async function deriveJettonWallet(req: Request) {
     
     return new Response(JSON.stringify({
       error: 'Could not derive jetton wallet address. All methods failed.',
-      details: error.message,
+      details: (error as Error).message,
       owner_address,
       jetton_master_address
     }), {
