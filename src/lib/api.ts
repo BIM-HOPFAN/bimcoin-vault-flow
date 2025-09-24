@@ -194,6 +194,50 @@ export class BimCoinAPI {
     })
     return await response.json()
   }
+
+  // Admin Task Management API
+  async getAdminTasks() {
+    const response = await fetch(`${this.baseUrl}/task-api/admin/tasks`)
+    return await response.json()
+  }
+
+  async createTask(taskData: any) {
+    const response = await fetch(`${this.baseUrl}/task-api/admin/tasks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(taskData)
+    })
+    return await response.json()
+  }
+
+  async updateTask(taskId: string, taskData: any) {
+    const response = await fetch(`${this.baseUrl}/task-api/admin/tasks/${taskId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(taskData)
+    })
+    return await response.json()
+  }
+
+  async deleteTask(taskId: string) {
+    const response = await fetch(`${this.baseUrl}/task-api/admin/tasks/${taskId}`, {
+      method: 'DELETE'
+    })
+    return await response.json()
+  }
+
+  async verifyTaskCompletion(walletAddress: string, taskId: string, verificationData?: any) {
+    const response = await fetch(`${this.baseUrl}/task-api/verify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        wallet_address: walletAddress, 
+        task_id: taskId,
+        verification_data: verificationData
+      })
+    })
+    return await response.json()
+  }
 }
 
 export const bimCoinAPI = new BimCoinAPI()
