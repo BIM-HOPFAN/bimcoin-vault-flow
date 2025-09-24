@@ -103,11 +103,15 @@ export class BimCoinAPI {
     return await response.json()
   }
 
-  async completeTask(walletAddress: string, taskId: string) {
+  async completeTask(walletAddress: string, taskId: string, verificationData?: any) {
     const response = await fetch(`${this.baseUrl}/task-api/complete`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ wallet_address: walletAddress, task_id: taskId })
+      body: JSON.stringify({ 
+        wallet_address: walletAddress, 
+        task_id: taskId,
+        verification_data: verificationData
+      })
     })
     return await response.json()
   }

@@ -16,6 +16,8 @@ interface Task {
   external_url?: string;
   status?: string;
   completed?: boolean;
+  verification_type?: string;
+  completion_timeout?: number;
 }
 
 const TaskCard = () => {
@@ -67,12 +69,27 @@ const TaskCard = () => {
 
     setCompletingTasks(prev => new Set(prev).add(taskId));
     try {
-      const result = await bimCoinAPI.completeTask(address, taskId);
+      const task = tasks.find(t => t.id === taskId);
+      let verificationData = {};
+
+      // Handle different verification types
+      if (task?.verification_type === 'url_visit' && task.external_url) {
+        verificationData = { visited_url: task.external_url };
+      } else if (task?.verification_type === 'time_based') {
+        verificationData = { start_time: new Date().toISOString() };
+        // For time-based tasks, show a waiting period
+        toast({
+          title: "Task started",
+          description: "Please wait for the completion timer...",
+        });
+        await new Promise(resolve => setTimeout(resolve, (task.completion_timeout || 5) * 1000));
+      }
+
+      const result = await bimCoinAPI.completeTask(address, taskId, verificationData);
       if (result.success) {
-        const task = tasks.find(t => t.id === taskId);
         toast({
           title: "Task completed!",
-          description: `You earned ${task?.reward_amount || 0} OBA tokens`,
+          description: `You earned ${task?.reward_amount || 0} OBA tokens${result.verification_status ? ' (Verified)' : ''}`,
           variant: "default",
         });
         await fetchTasks(); // Refresh tasks

@@ -243,8 +243,42 @@ export type Database = {
           },
         ]
       }
+      task_verification_logs: {
+        Row: {
+          created_at: string
+          error_message: string | null
+          id: string
+          success: boolean
+          task_id: string
+          user_id: string
+          verification_attempt: Json
+          verification_type: string
+        }
+        Insert: {
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          success?: boolean
+          task_id: string
+          user_id: string
+          verification_attempt?: Json
+          verification_type: string
+        }
+        Update: {
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          success?: boolean
+          task_id?: string
+          user_id?: string
+          verification_attempt?: Json
+          verification_type?: string
+        }
+        Relationships: []
+      }
       tasks: {
         Row: {
+          completion_timeout: number | null
           created_at: string | null
           daily_limit: number | null
           description: string
@@ -255,8 +289,11 @@ export type Database = {
           task_type: string
           title: string
           updated_at: string | null
+          verification_data: Json | null
+          verification_type: string | null
         }
         Insert: {
+          completion_timeout?: number | null
           created_at?: string | null
           daily_limit?: number | null
           description: string
@@ -267,8 +304,11 @@ export type Database = {
           task_type: string
           title: string
           updated_at?: string | null
+          verification_data?: Json | null
+          verification_type?: string | null
         }
         Update: {
+          completion_timeout?: number | null
           created_at?: string | null
           daily_limit?: number | null
           description?: string
@@ -279,6 +319,8 @@ export type Database = {
           task_type?: string
           title?: string
           updated_at?: string | null
+          verification_data?: Json | null
+          verification_type?: string | null
         }
         Relationships: []
       }
@@ -292,6 +334,9 @@ export type Database = {
           status: Database["public"]["Enums"]["task_status"] | null
           task_id: string
           user_id: string
+          verification_data: Json | null
+          verification_status: string | null
+          verified_at: string | null
         }
         Insert: {
           claimed_at?: string | null
@@ -302,6 +347,9 @@ export type Database = {
           status?: Database["public"]["Enums"]["task_status"] | null
           task_id: string
           user_id: string
+          verification_data?: Json | null
+          verification_status?: string | null
+          verified_at?: string | null
         }
         Update: {
           claimed_at?: string | null
@@ -312,6 +360,9 @@ export type Database = {
           status?: Database["public"]["Enums"]["task_status"] | null
           task_id?: string
           user_id?: string
+          verification_data?: Json | null
+          verification_status?: string | null
+          verified_at?: string | null
         }
         Relationships: [
           {

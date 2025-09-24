@@ -14,8 +14,31 @@ Deno.serve(async (req) => {
 
   try {
     const url = new URL(req.url)
-    const path = url.pathname.split('/').pop()
+    const pathSegments = url.pathname.split('/').filter(Boolean)
+    const path = pathSegments[pathSegments.length - 1]
+    const secondLastPath = pathSegments[pathSegments.length - 2]
 
+    // Admin routes
+    if (secondLastPath === 'admin') {
+      switch (req.method) {
+        case 'GET':
+          if (path === 'tasks') {
+            return await getAdminTasks()
+          }
+          break
+        case 'POST':
+          if (path === 'tasks') {
+            return await createTask(req)
+          }
+          break
+        case 'PUT':
+          return await updateTask(req, path)
+        case 'DELETE':
+          return await deleteTask(path)
+      }
+    }
+
+    // Regular user routes
     switch (req.method) {
       case 'GET':
         if (path === 'available') {
@@ -27,7 +50,9 @@ Deno.serve(async (req) => {
 
       case 'POST':
         if (path === 'complete') {
-          return await completeTask(req)
+          return await completeTaskWithVerification(req)
+        } else if (path === 'verify') {
+          return await verifyTaskCompletion(req)
         }
         break
 
@@ -145,8 +170,102 @@ async function getUserTasks(params: URLSearchParams) {
   })
 }
 
-async function completeTask(req: Request) {
-  const { wallet_address, task_id } = await req.json()
+// Admin Functions
+async function getAdminTasks() {
+  const { data: tasks, error } = await supabase
+    .from('tasks')
+    .select('*')
+    .order('created_at', { ascending: false })
+
+  if (error) throw error
+
+  return new Response(JSON.stringify({ 
+    success: true, 
+    data: tasks 
+  }), {
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+  })
+}
+
+async function createTask(req: Request) {
+  const taskData = await req.json()
+  
+  const { data: task, error } = await supabase
+    .from('tasks')
+    .insert({
+      title: taskData.title,
+      description: taskData.description,
+      reward_amount: taskData.reward_amount,
+      task_type: taskData.task_type,
+      external_url: taskData.external_url,
+      is_active: taskData.is_active,
+      daily_limit: taskData.daily_limit,
+      verification_type: taskData.verification_type || 'manual',
+      verification_data: taskData.verification_data || {},
+      completion_timeout: taskData.completion_timeout || 300
+    })
+    .select()
+    .single()
+
+  if (error) throw error
+
+  return new Response(JSON.stringify({ 
+    success: true, 
+    data: task 
+  }), {
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+  })
+}
+
+async function updateTask(req: Request, taskId: string) {
+  const taskData = await req.json()
+  
+  const { data: task, error } = await supabase
+    .from('tasks')
+    .update({
+      title: taskData.title,
+      description: taskData.description,
+      reward_amount: taskData.reward_amount,
+      task_type: taskData.task_type,
+      external_url: taskData.external_url,
+      is_active: taskData.is_active,
+      daily_limit: taskData.daily_limit,
+      verification_type: taskData.verification_type,
+      verification_data: taskData.verification_data,
+      completion_timeout: taskData.completion_timeout
+    })
+    .eq('id', taskId)
+    .select()
+    .single()
+
+  if (error) throw error
+
+  return new Response(JSON.stringify({ 
+    success: true, 
+    data: task 
+  }), {
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+  })
+}
+
+async function deleteTask(taskId: string) {
+  const { error } = await supabase
+    .from('tasks')
+    .update({ is_active: false })
+    .eq('id', taskId)
+
+  if (error) throw error
+
+  return new Response(JSON.stringify({ 
+    success: true 
+  }), {
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+  })
+}
+
+// Enhanced task completion with verification
+async function completeTaskWithVerification(req: Request) {
+  const { wallet_address, task_id, verification_data } = await req.json()
 
   if (!wallet_address || !task_id) {
     return new Response(JSON.stringify({ error: 'Wallet address and task ID required' }), {
@@ -202,6 +321,30 @@ async function completeTask(req: Request) {
     })
   }
 
+  // Perform verification based on task type
+  const verificationResult = await performTaskVerification(user, task, verification_data)
+  
+  // Log verification attempt
+  await supabase
+    .from('task_verification_logs')
+    .insert({
+      user_id: user.id,
+      task_id: task_id,
+      verification_type: task.verification_type,
+      verification_attempt: verification_data || {},
+      success: verificationResult.success,
+      error_message: verificationResult.error || null
+    })
+
+  if (!verificationResult.success) {
+    return new Response(JSON.stringify({ 
+      error: verificationResult.error || 'Task verification failed' 
+    }), {
+      status: 400,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    })
+  }
+
   // Create user task completion record
   const { data: userTask, error: userTaskError } = await supabase
     .from('user_tasks')
@@ -209,9 +352,12 @@ async function completeTask(req: Request) {
       user_id: user.id,
       task_id: task_id,
       status: 'completed',
+      verification_status: 'verified',
       completed_at: new Date().toISOString(),
       claimed_at: new Date().toISOString(),
-      reward_earned: task.reward_amount.toString()
+      verified_at: new Date().toISOString(),
+      reward_earned: task.reward_amount.toString(),
+      verification_data: verification_data || {}
     })
     .select()
     .single()
@@ -236,7 +382,111 @@ async function completeTask(req: Request) {
   return new Response(JSON.stringify({
     success: true,
     reward_earned: task.reward_amount,
-    new_oba_balance: newObaBalance
+    new_oba_balance: newObaBalance,
+    verification_status: 'verified'
+  }), {
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+  })
+}
+
+// Verification system
+async function performTaskVerification(user: any, task: any, verificationData: any) {
+  switch (task.verification_type) {
+    case 'manual':
+      return { success: true }
+    
+    case 'url_visit':
+      return await verifyUrlVisit(task, verificationData)
+    
+    case 'social_follow':
+      return await verifySocialFollow(task, verificationData)
+    
+    case 'deposit_check':
+      return await verifyDeposit(user, task, verificationData)
+    
+    case 'time_based':
+      return await verifyTimeBased(task, verificationData)
+    
+    default:
+      return { success: false, error: 'Unknown verification type' }
+  }
+}
+
+async function verifyUrlVisit(task: any, verificationData: any) {
+  // For URL visit, we could track referrers or implement a time-based check
+  // This is a simplified version
+  if (verificationData?.visited_url === task.external_url) {
+    return { success: true }
+  }
+  return { success: false, error: 'URL visit not verified' }
+}
+
+async function verifySocialFollow(task: any, verificationData: any) {
+  // This would integrate with social media APIs to check if user followed
+  // For now, return success (would need actual API integration)
+  return { success: true }
+}
+
+async function verifyDeposit(user: any, task: any, verificationData: any) {
+  // Check if user has made a deposit recently
+  const { data: deposits } = await supabase
+    .from('deposits')
+    .select('*')
+    .eq('user_id', user.id)
+    .eq('status', 'completed')
+    .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+
+  return { 
+    success: deposits && deposits.length > 0,
+    error: deposits?.length === 0 ? 'No recent deposits found' : undefined
+  }
+}
+
+async function verifyTimeBased(task: any, verificationData: any) {
+  // Check if enough time has passed or specific time criteria met
+  const startTime = verificationData?.start_time
+  if (!startTime) {
+    return { success: false, error: 'Start time not provided' }
+  }
+  
+  const elapsed = Date.now() - new Date(startTime).getTime()
+  const requiredTime = (task.completion_timeout || 300) * 1000 // Convert to milliseconds
+  
+  return { 
+    success: elapsed >= requiredTime,
+    error: elapsed < requiredTime ? `Need to wait ${Math.ceil((requiredTime - elapsed) / 1000)} more seconds` : undefined
+  }
+}
+
+async function verifyTaskCompletion(req: Request) {
+  const { wallet_address, task_id, verification_data } = await req.json()
+  
+  // Get user and task
+  const { data: user } = await supabase
+    .from('users')
+    .select('*')
+    .eq('wallet_address', wallet_address)
+    .single()
+
+  const { data: task } = await supabase
+    .from('tasks')
+    .select('*')
+    .eq('id', task_id)
+    .single()
+
+  if (!user || !task) {
+    return new Response(JSON.stringify({ error: 'User or task not found' }), {
+      status: 404,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    })
+  }
+
+  const verificationResult = await performTaskVerification(user, task, verification_data)
+  
+  return new Response(JSON.stringify({
+    success: verificationResult.success,
+    error: verificationResult.error,
+    verification_type: task.verification_type
   }), {
     headers: { ...corsHeaders, 'Content-Type': 'application/json' }
   })
