@@ -168,8 +168,8 @@ serve(async (req) => {
       }
 
       const burnAmount = parseFloat(bim_amount)
-      // Exchange rate: 1000 BIM = 1 TON
-      const tonAmount = burnAmount * 0.001
+      // Exchange rate: 200 BIM = 1 TON
+      const tonAmount = burnAmount * 0.005
 
       // Get user
       const { data: user, error: userError } = await supabase

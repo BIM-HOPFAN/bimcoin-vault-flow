@@ -127,7 +127,7 @@ export const BIMBurnCard: React.FC<BIMBurnCardProps> = ({
     return () => clearTimeout(timer);
   }, [burnAmount, address]);
 
-  const tonReceived = parseFloat(burnAmount) * 0.001 || 0;
+  const tonReceived = parseFloat(burnAmount) * 0.005 || 0;
 
   return (
     <Card className="enhanced-card">
@@ -154,7 +154,7 @@ export const BIMBurnCard: React.FC<BIMBurnCardProps> = ({
           </TabsList>
           <TabsContent value="ton" className="space-y-4 mt-4">
             <div className="text-sm text-muted-foreground">
-              Receive TON directly to your wallet (Exchange: 1000 BIM = 1 TON)
+              Receive TON directly to your wallet (Exchange: 200 BIM = 1 TON)
             </div>
           </TabsContent>
           <TabsContent value="jetton" className="space-y-4 mt-4">
@@ -193,7 +193,7 @@ export const BIMBurnCard: React.FC<BIMBurnCardProps> = ({
         <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
           <span className="text-sm font-medium">Exchange Rate:</span>
           <span className="text-sm text-muted-foreground">
-            {payoutType === 'ton' ? '1000 BIM = 1 TON' : '1 BIM = 1 Bimcoin'}
+            {payoutType === 'ton' ? '200 BIM = 1 TON' : '1 BIM = 1 Bimcoin'}
           </span>
         </div>
         
@@ -236,7 +236,7 @@ export const BIMBurnCard: React.FC<BIMBurnCardProps> = ({
                 ) : (
                   <span className="font-medium text-primary">
                     {payoutType === 'ton' 
-                      ? `${(parseFloat(burnAmount) * 0.001).toFixed(6)} TON`
+                      ? `${(parseFloat(burnAmount) * 0.005).toFixed(6)} TON`
                       : `${parseFloat(burnAmount).toFixed(6)} Bimcoin`
                     }
                   </span>
