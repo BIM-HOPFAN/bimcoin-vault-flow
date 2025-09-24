@@ -209,51 +209,71 @@ async function processDeposit(req: Request) {
 
     // Check for referral reward
     if (deposit.users.referred_by) {
-      const { data: referralConfig } = await supabase
-        .from('config')
-        .select('value')
-        .eq('key', 'referral_rate')
-        .single()
+      // Check if this is the first deposit for referral
+      const { count: depositCount } = await supabase
+        .from('deposits')
+        .select('*', { count: 'exact' })
+        .eq('user_id', deposit.user_id)
+        .eq('status', 'confirmed')
 
-      if (referralConfig) {
-        const referralRate = parseFloat(referralConfig.value)
-        const referralReward = parseFloat(deposit.bim_amount) * referralRate
-
-        // Check if this is the first deposit for referral
-        const { count: depositCount } = await supabase
-          .from('deposits')
+      if (depositCount === 1) {
+        // Check if referrer already had a successful referral today
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+        
+        const { count: todayReferralCount } = await supabase
+          .from('referrals')
           .select('*', { count: 'exact' })
-          .eq('user_id', deposit.user_id)
-          .eq('status', 'confirmed')
+          .eq('referrer_id', deposit.users.referred_by)
+          .eq('status', 'completed')
+          .gte('completed_at', today.toISOString())
 
-        if (depositCount === 1) {
-          // Create referral record
-          await supabase
-            .from('referrals')
-            .insert({
-              referrer_id: deposit.users.referred_by,
-              referee_id: deposit.user_id,
-              first_deposit_id: deposit.id,
-              reward_amount: referralReward.toString(),
-              status: 'completed',
-              completed_at: new Date().toISOString()
-            })
-
-          // Update referrer's OBA balance
-          const { data: referrer } = await supabase
-            .from('users')
-            .select('oba_balance, total_earned_from_referrals')
-            .eq('id', deposit.users.referred_by)
+        if (todayReferralCount === 0) {
+          const { data: referralConfig } = await supabase
+            .from('config')
+            .select('value')
+            .eq('key', 'referral_rate')
             .single()
 
-          if (referrer) {
-            await supabase
-              .from('users')
-              .update({
-                oba_balance: (parseFloat(referrer.oba_balance) + referralReward).toString(),
-                total_earned_from_referrals: (parseFloat(referrer.total_earned_from_referrals) + referralReward).toString()
-              })
-              .eq('id', deposit.users.referred_by)
+          if (referralConfig) {
+            const referralRate = parseFloat(referralConfig.value)
+            
+            // Get referrer's active BIM deposits using the database function
+            const { data: referrerActiveBim } = await supabase
+              .rpc('get_active_deposit_bim', { user_uuid: deposit.users.referred_by })
+
+            if (referrerActiveBim && referrerActiveBim > 0) {
+              const referralReward = referrerActiveBim * referralRate
+
+              // Create referral record
+              await supabase
+                .from('referrals')
+                .insert({
+                  referrer_id: deposit.users.referred_by,
+                  referee_id: deposit.user_id,
+                  first_deposit_id: deposit.id,
+                  reward_amount: referralReward.toString(),
+                  status: 'completed',
+                  completed_at: new Date().toISOString()
+                })
+
+              // Update referrer's OBA balance
+              const { data: referrer } = await supabase
+                .from('users')
+                .select('oba_balance, total_earned_from_referrals')
+                .eq('id', deposit.users.referred_by)
+                .single()
+
+              if (referrer) {
+                await supabase
+                  .from('users')
+                  .update({
+                    oba_balance: (parseFloat(referrer.oba_balance) + referralReward).toString(),
+                    total_earned_from_referrals: (parseFloat(referrer.total_earned_from_referrals) + referralReward).toString()
+                  })
+                  .eq('id', deposit.users.referred_by)
+              }
+            }
           }
         }
       }
