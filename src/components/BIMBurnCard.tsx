@@ -5,8 +5,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useTonAddress } from '@tonconnect/ui-react';
 import { useToast } from '@/hooks/use-toast';
-import { Flame, ArrowRight } from 'lucide-react';
+import { Flame, ArrowRight, Coins } from 'lucide-react';
 import { bimCoinAPI } from '@/lib/api';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 interface BIMBurnCardProps {
   bimBalance: number;
@@ -21,6 +22,7 @@ export const BIMBurnCard: React.FC<BIMBurnCardProps> = ({
   const [loading, setLoading] = useState(false);
   const [burnPreview, setBurnPreview] = useState<any>(null);
   const [showPenaltyWarning, setShowPenaltyWarning] = useState(false);
+  const [payoutType, setPayoutType] = useState<'ton' | 'jetton'>('ton');
   const address = useTonAddress();
   const { toast } = useToast();
 
@@ -55,12 +57,16 @@ export const BIMBurnCard: React.FC<BIMBurnCardProps> = ({
 
     setLoading(true);
     try {
-      const result = await bimCoinAPI.burnBIM(address, amount);
+      const result = await bimCoinAPI.burnBIM(address, amount, payoutType);
       
       if (result.success) {
+        const payoutDescription = payoutType === 'ton' 
+          ? `${result.ton_received} TON` 
+          : `${result.jettons_received} Bimcoin jettons`;
+        
         toast({
           title: "BIM burned successfully!",
-          description: `Burned ${result.bim_burned} BIM and received ${result.ton_received} TON`,
+          description: `Burned ${result.bim_burned} BIM and received ${payoutDescription}`,
           variant: "default",
         });
         setBurnAmount('');
@@ -128,13 +134,35 @@ export const BIMBurnCard: React.FC<BIMBurnCardProps> = ({
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Flame className="w-5 h-5 text-orange-500" />
-          Burn BIM for TON
+          Burn BIM
         </CardTitle>
         <CardDescription>
-          Burn your BIM tokens to receive TON directly to your wallet
+          Burn your BIM tokens to receive TON or Bimcoin jettons
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        <Tabs value={payoutType} onValueChange={(value) => setPayoutType(value as 'ton' | 'jetton')}>
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="ton" className="flex items-center gap-2">
+              <Flame className="w-4 h-4" />
+              TON Payout
+            </TabsTrigger>
+            <TabsTrigger value="jetton" className="flex items-center gap-2">
+              <Coins className="w-4 h-4" />
+              Bimcoin Payout
+            </TabsTrigger>
+          </TabsList>
+          <TabsContent value="ton" className="space-y-4 mt-4">
+            <div className="text-sm text-muted-foreground">
+              Receive TON directly to your wallet (Exchange: 1000 BIM = 1 TON)
+            </div>
+          </TabsContent>
+          <TabsContent value="jetton" className="space-y-4 mt-4">
+            <div className="text-sm text-muted-foreground">
+              Receive Bimcoin jettons to your wallet (Exchange: 1 BIM = 1 Bimcoin)
+            </div>
+          </TabsContent>
+        </Tabs>
         <div className="space-y-2">
           <Label htmlFor="burn-amount">BIM Amount to Burn</Label>
           <div className="flex gap-2">
@@ -164,7 +192,9 @@ export const BIMBurnCard: React.FC<BIMBurnCardProps> = ({
 
         <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
           <span className="text-sm font-medium">Exchange Rate:</span>
-          <span className="text-sm text-muted-foreground">1000 BIM = 1 TON</span>
+          <span className="text-sm text-muted-foreground">
+            {payoutType === 'ton' ? '1000 BIM = 1 TON' : '1 BIM = 1 Bimcoin'}
+          </span>
         </div>
         
         {showPenaltyWarning && burnPreview && (
@@ -190,16 +220,25 @@ export const BIMBurnCard: React.FC<BIMBurnCardProps> = ({
                   <>
                     {showPenaltyWarning && (
                       <div className="text-sm text-muted-foreground line-through">
-                        {burnPreview.original_ton_amount.toFixed(6)} TON
+                        {payoutType === 'ton' 
+                          ? `${burnPreview.original_ton_amount.toFixed(6)} TON` 
+                          : `${parseFloat(burnAmount).toFixed(6)} Bimcoin`
+                        }
                       </div>
                     )}
                     <div className="font-medium text-primary">
-                      {burnPreview.final_ton_amount.toFixed(6)} TON
+                      {payoutType === 'ton' 
+                        ? `${burnPreview.final_ton_amount.toFixed(6)} TON`
+                        : `${(parseFloat(burnAmount) * (1 - (burnPreview.penalty_amount / parseFloat(burnAmount)))).toFixed(6)} Bimcoin`
+                      }
                     </div>
                   </>
                 ) : (
                   <span className="font-medium text-primary">
-                    {(parseFloat(burnAmount) * 0.001).toFixed(6)} TON
+                    {payoutType === 'ton' 
+                      ? `${(parseFloat(burnAmount) * 0.001).toFixed(6)} TON`
+                      : `${parseFloat(burnAmount).toFixed(6)} Bimcoin`
+                    }
                   </span>
                 )}
               </div>
@@ -220,8 +259,17 @@ export const BIMBurnCard: React.FC<BIMBurnCardProps> = ({
             </>
           ) : (
             <>
-              <Flame className="w-4 h-4 mr-2" />
-              Burn BIM for TON
+              {payoutType === 'ton' ? (
+                <>
+                  <Flame className="w-4 h-4 mr-2" />
+                  Burn BIM for TON
+                </>
+              ) : (
+                <>
+                  <Coins className="w-4 h-4 mr-2" />
+                  Burn BIM for Bimcoin
+                </>
+              )}
             </>
           )}
         </Button>

@@ -397,6 +397,149 @@ serve(async (req) => {
       }
     }
 
+    // Burn BIM for Bimcoin jettons
+    if (req.method === 'POST' && path === '/burn-bim-for-jetton') {
+      const { wallet_address, bim_amount } = await req.json()
+
+      if (!wallet_address || !bim_amount) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Missing wallet_address or bim_amount' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      const burnAmount = parseFloat(bim_amount)
+      if (burnAmount <= 0) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Invalid burn amount' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      // Get user from database
+      const { data: user, error: userError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('wallet_address', wallet_address)
+        .single()
+
+      if (userError || !user) {
+        console.error('User fetch error:', userError)
+        return new Response(
+          JSON.stringify({ success: false, error: 'User not found' }),
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      // Check if user has enough BIM balance
+      if (parseFloat(user.bim_balance) < burnAmount) {
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: `Insufficient BIM balance. Available: ${user.bim_balance}, Required: ${burnAmount}` 
+          }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      // Determine burn type and calculate penalty
+      const depositBimBalance = parseFloat(user.deposit_bim_balance || '0')
+      const earnedBimBalance = parseFloat(user.earned_bim_balance || '0')
+      
+      let burnType = 'earned_bim'
+      let penaltyAmount = 0
+      let finalBurnAmount = burnAmount
+      let jettonAmount = burnAmount // 1:1 ratio for jettons
+
+      // If burning more than earned BIM, we're burning from deposits (penalty applies)
+      if (burnAmount > earnedBimBalance) {
+        const depositBurnAmount = burnAmount - earnedBimBalance
+        
+        if (depositBurnAmount > depositBimBalance) {
+          return new Response(
+            JSON.stringify({ 
+              success: false, 
+              error: 'Insufficient deposit BIM balance' 
+            }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          )
+        }
+
+        // Apply 50% penalty to deposit BIM being burned
+        penaltyAmount = depositBurnAmount * 0.5
+        jettonAmount = burnAmount * (1 - (penaltyAmount / burnAmount))
+        burnType = 'deposit_bim'
+        
+        console.log(`Burning deposit BIM with penalty: ${depositBurnAmount} BIM, penalty: ${penaltyAmount}, final jettons: ${jettonAmount}`)
+      }
+
+      try {
+        // Call jetton minter to mint tokens to user's wallet
+        const mintResponse = await supabase.functions.invoke('jetton-minter', {
+          body: { 
+            action: 'mint', 
+            destination: wallet_address, 
+            amount: jettonAmount 
+          }
+        })
+
+        if (mintResponse.error) {
+          throw new Error(`Jetton minting failed: ${mintResponse.error.message}`)
+        }
+
+        if (!mintResponse.data?.success) {
+          throw new Error(`Jetton minting failed: ${mintResponse.data?.error || 'Unknown error'}`)
+        }
+
+        const jettonHash = mintResponse.data.transaction_hash || 'pending'
+        console.log(`Jetton minting successful with hash: ${jettonHash}`)
+
+        // Record burn with jetton details
+        const { data: burnRecord, error: burnError } = await supabase
+          .from('burns')
+          .insert({
+            user_id: user.id,
+            bim_amount: burnAmount,
+            ton_amount: 0, // No TON for jetton burns
+            jetton_burn_hash: jettonHash,
+            payout_processed: true, // Mark as processed since jettons are minted
+            penalty_amount: penaltyAmount,
+            burn_type: burnType
+          })
+          .select()
+          .single()
+
+        if (burnError) throw burnError
+
+        console.log(`Burn record created successfully for user ${user.id}`)
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            message: 'BIM burned and Bimcoin jettons minted successfully',
+            bim_burned: burnAmount,
+            jettons_received: jettonAmount,
+            penalty_applied: penaltyAmount,
+            burn_type: burnType,
+            jetton_hash: jettonHash
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+
+      } catch (error) {
+        console.error('Jetton burn error:', error)
+        const errorObj = error as Error
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: 'Failed to mint jettons', 
+            details: errorObj.message 
+          }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+    }
+
     // Get burn history
     if (req.method === 'GET' && path === '/history') {
       const wallet_address = url.searchParams.get('wallet_address')
