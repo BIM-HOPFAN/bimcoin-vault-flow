@@ -16,6 +16,13 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:site" content="@Bimcoin_Official" />
     <meta name="twitter:image" content="https://bimcoin.app/og-image.png" />
+    
+    <script>
+      // Polyfill for Node.js globals needed by TON libraries
+      if (typeof global === 'undefined') {
+        var global = globalThis;
+      }
+    </script>
   </head>
 
   <body>
