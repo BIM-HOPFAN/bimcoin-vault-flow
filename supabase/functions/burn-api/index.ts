@@ -540,6 +540,93 @@ serve(async (req) => {
       }
     }
 
+    // Get burn preview with penalty calculation
+    if (req.method === 'POST' && path === '/preview') {
+      const { wallet_address, bim_amount } = await req.json()
+
+      if (!wallet_address || !bim_amount || bim_amount <= 0) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Invalid wallet address or BIM amount' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      const burnAmount = parseFloat(bim_amount)
+
+      // Get user
+      const { data: user, error: userError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('wallet_address', wallet_address)
+        .single()
+
+      if (userError || !user) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'User not found' }),
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      // Check if user has enough BIM balance
+      if (parseFloat(user.bim_balance) < burnAmount) {
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: `Insufficient BIM balance. Available: ${user.bim_balance}, Required: ${burnAmount}` 
+          }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      // Calculate preview with penalty logic
+      const depositBimBalance = parseFloat(user.deposit_bim_balance || '0')
+      const earnedBimBalance = parseFloat(user.earned_bim_balance || '0')
+      
+      let burnType = 'earned_bim'
+      let penaltyAmount = 0
+      let tonAmount = burnAmount * 0.005 // 200 BIM = 1 TON
+      let jettonAmount = burnAmount // 1:1 ratio for jettons
+      let finalTonAmount = tonAmount
+      let finalJettonAmount = jettonAmount
+
+      // If burning more than earned BIM, calculate penalty
+      if (burnAmount > earnedBimBalance) {
+        const depositBurnAmount = burnAmount - earnedBimBalance
+        
+        if (depositBurnAmount > depositBimBalance) {
+          return new Response(
+            JSON.stringify({ 
+              success: false, 
+              error: 'Insufficient deposit BIM balance' 
+            }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          )
+        }
+
+        // Apply 50% penalty to deposit BIM being burned
+        penaltyAmount = depositBurnAmount * 0.5
+        finalTonAmount = tonAmount * (1 - (penaltyAmount / burnAmount))
+        finalJettonAmount = burnAmount * (1 - (penaltyAmount / burnAmount))
+        burnType = 'deposit_bim'
+      }
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          preview: {
+            bim_amount: burnAmount,
+            ton_amount: finalTonAmount,
+            jetton_amount: finalJettonAmount,
+            penalty_amount: penaltyAmount,
+            burn_type: burnType,
+            deposit_bim_balance: depositBimBalance,
+            earned_bim_balance: earnedBimBalance
+          }
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
     // Get burn history
     if (req.method === 'GET' && path === '/history') {
       const wallet_address = url.searchParams.get('wallet_address')
