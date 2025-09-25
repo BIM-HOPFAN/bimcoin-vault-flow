@@ -124,6 +124,21 @@ const MiningCard = () => {
           description: "You're now mining OBA tokens!",
           variant: "default",
         });
+      } else if (result.error === 'User not found') {
+        // Auto-register user and try again
+        console.log('User not found, registering...');
+        await bimCoinAPI.registerUser(address);
+        const retryResult = await bimCoinAPI.startMining(address);
+        if (retryResult.success) {
+          await fetchMiningStatus();
+          toast({
+            title: "Mining started",
+            description: "You're now mining OBA tokens!",
+            variant: "default",
+          });
+        } else {
+          throw new Error(retryResult.error || 'Failed to start mining after registration');
+        }
       } else {
         throw new Error(result.error || 'Failed to start mining');
       }
