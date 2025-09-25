@@ -6,10 +6,12 @@ interface TonConnectProviderProps {
 }
 
 const TonConnectProvider = ({ children }: TonConnectProviderProps) => {
+  const manifestUrl = `${window.location.origin}/tonconnect-manifest.json`;
+  
+  console.log('TonConnect manifest URL:', manifestUrl);
+  
   return (
-    <TonConnectUIProvider 
-      manifestUrl={`${window.location.origin}/tonconnect-manifest.json`}
-    >
+    <TonConnectUIProvider manifestUrl={manifestUrl}>
       {children}
     </TonConnectUIProvider>
   );
