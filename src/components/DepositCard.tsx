@@ -125,8 +125,12 @@ const DepositCard = () => {
           // Derive the treasury's jetton wallet address  
           const treasuryJettonWallet = await deriveJettonWalletAddress(intentResult.treasury_address, intentResult.minter_address);
           
+          console.log(`Bimcoin master address: ${intentResult.minter_address}`);
+          console.log(`User address: ${address}`);
+          console.log(`Treasury address: ${intentResult.treasury_address}`);
           console.log(`User jetton wallet: ${userJettonWallet}`);
           console.log(`Treasury jetton wallet: ${treasuryJettonWallet}`);
+          console.log(`Deposit comment: ${intentResult.deposit_comment}`);
           
           const jettonAmount = BigInt(Math.floor(depositAmount * 1e9)); // Convert to jetton decimals (9)
           
