@@ -9,9 +9,6 @@ const TonConnectProvider = ({ children }: TonConnectProviderProps) => {
   return (
     <TonConnectUIProvider 
       manifestUrl={`${window.location.origin}/tonconnect-manifest.json`}
-      actionsConfiguration={{
-        twaReturnUrl: 'https://t.me/BIMCoinOfficialBot'
-      }}
     >
       {children}
     </TonConnectUIProvider>
