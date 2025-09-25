@@ -138,7 +138,13 @@ async function createDepositIntent(req: Request) {
   if (depositError) throw depositError
 
   // Get treasury address from config
-  const treasuryAddress = Deno.env.get('TREASURY_ADDRESS')
+  const { data: treasuryConfig } = await supabase
+    .from('config')
+    .select('value')
+    .eq('key', 'treasury_address')
+    .single()
+  
+  const treasuryAddress = treasuryConfig?.value || Deno.env.get('TREASURY_ADDRESS')
 
   // Get minter address for Bimcoin deposits  
   const minterAddress = deposit_type === 'Bimcoin' ? (Deno.env.get('MINTER_ADDRESS') || await getMinterAddressFromConfig()) : null;
