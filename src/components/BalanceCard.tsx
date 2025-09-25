@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Wallet, TrendingUp, ArrowUpCircle, RefreshCw } from 'lucide-react';
+import { Wallet, TrendingUp, RefreshCw } from 'lucide-react';
 import { useTonAddress } from '@tonconnect/ui-react';
 import { useToast } from '@/hooks/use-toast';
 import { bimCoinAPI } from '@/lib/api';
