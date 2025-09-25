@@ -2,16 +2,10 @@ import { TonConnectButton, useTonAddress, useTonConnectUI } from '@tonconnect/ui
 import { Button } from '@/components/ui/button';
 import { Wallet } from 'lucide-react';
 import { useEffect } from 'react';
-import { diagnoseTonConnect } from '@/utils/tonConnectDiagnostics';
 
 const WalletConnectButton = () => {
   const address = useTonAddress();
   const [tonConnectUI] = useTonConnectUI();
-
-  // Run diagnostics on mount
-  useEffect(() => {
-    diagnoseTonConnect();
-  }, []);
 
   // Listen for connection status changes
   useEffect(() => {
@@ -22,9 +16,6 @@ const WalletConnectButton = () => {
         } else {
           console.log('Wallet disconnected');
         }
-      },
-      (error) => {
-        console.error('Status change error:', error);
       }
     );
 
