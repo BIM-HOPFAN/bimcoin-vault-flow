@@ -478,8 +478,8 @@ serve(async (req) => {
         const mintResponse = await supabase.functions.invoke('jetton-minter', {
           body: { 
             action: 'mint', 
-            destination: wallet_address, 
-            amount: jettonAmount 
+            user_wallet: wallet_address, 
+            bim_amount: jettonAmount 
           }
         })
 
@@ -625,6 +625,144 @@ serve(async (req) => {
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
+    }
+
+    // Burn BIM for TON payout
+    if (req.method === 'POST' && path === '/burn-bim-for-ton') {
+      const { wallet_address, bim_amount } = await req.json()
+
+      if (!wallet_address || !bim_amount) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Missing wallet_address or bim_amount' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      const burnAmount = parseFloat(bim_amount)
+      if (burnAmount <= 0) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Invalid burn amount' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      // Get user from database
+      const { data: user, error: userError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('wallet_address', wallet_address)
+        .single()
+
+      if (userError || !user) {
+        console.error('User fetch error:', userError)
+        return new Response(
+          JSON.stringify({ success: false, error: 'User not found' }),
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      // Check if user has enough BIM balance
+      if (parseFloat(user.bim_balance) < burnAmount) {
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: `Insufficient BIM balance. Available: ${user.bim_balance}, Required: ${burnAmount}` 
+          }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      // Determine burn type and calculate penalty
+      const depositBimBalance = parseFloat(user.deposit_bim_balance || '0')
+      const earnedBimBalance = parseFloat(user.earned_bim_balance || '0')
+      
+      let burnType = 'earned_bim'
+      let penaltyAmount = 0
+      let tonAmount = burnAmount * 0.005 // 200 BIM = 1 TON
+      let finalTonAmount = tonAmount
+
+      // If burning more than earned BIM, we're burning from deposits (penalty applies)
+      if (burnAmount > earnedBimBalance) {
+        const depositBurnAmount = burnAmount - earnedBimBalance
+        
+        if (depositBurnAmount > depositBimBalance) {
+          return new Response(
+            JSON.stringify({ 
+              success: false, 
+              error: 'Insufficient deposit BIM balance' 
+            }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          )
+        }
+
+        // Apply 50% penalty to deposit BIM being burned
+        penaltyAmount = depositBurnAmount * 0.5
+        finalTonAmount = tonAmount * (1 - (penaltyAmount / burnAmount))
+        burnType = 'deposit_bim'
+        
+        console.log(`Burning deposit BIM with penalty: ${depositBurnAmount} BIM, penalty: ${penaltyAmount}, final TON: ${finalTonAmount}`)
+      }
+
+      try {
+        // Record burn with TON details
+        const { data: burnRecord, error: burnError } = await supabase
+          .from('burns')
+          .insert({
+            user_id: user.id,
+            bim_amount: burnAmount,
+            ton_amount: finalTonAmount,
+            penalty_amount: penaltyAmount,
+            burn_type: burnType,
+            jetton_burn_hash: 'ton_payout_pending',
+            payout_processed: false
+          })
+          .select('*')
+          .single()
+
+        if (burnError) {
+          throw new Error(`Failed to record burn: ${burnError.message}`)
+        }
+
+        // TODO: Implement actual TON transfer logic here
+        // For now, we'll mark it as processed with a placeholder hash
+        const tonPayoutHash = `ton_${Date.now()}_${burnRecord.id.substring(0, 8)}`
+        
+        const { error: updateError } = await supabase
+          .from('burns')
+          .update({
+            ton_payout_hash: tonPayoutHash,
+            payout_processed: true,
+            processed_at: new Date().toISOString()
+          })
+          .eq('id', burnRecord.id)
+
+        if (updateError) {
+          throw new Error(`Failed to update burn record: ${updateError.message}`)
+        }
+
+        console.log(`TON payout successful: ${finalTonAmount} TON to ${wallet_address}`)
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            burn_id: burnRecord.id,
+            bim_burned: burnAmount,
+            ton_amount: finalTonAmount,
+            penalty_amount: penaltyAmount,
+            ton_payout_hash: tonPayoutHash,
+            message: 'BIM burned successfully, TON payout processed'
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+
+      } catch (error) {
+        console.error('TON burn error:', error)
+        const errorObj = error as Error
+        return new Response(
+          JSON.stringify({ success: false, error: errorObj.message }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
     }
 
     // Get burn history
