@@ -27,11 +27,19 @@ Deno.serve(async (req) => {
 
     switch (req.method) {
       case 'POST':
-        if (path === 'check-deposits') {
+        // Handle JSON body for POST requests
+        let body = null
+        try {
+          body = await req.json()
+        } catch (e) {
+          // No JSON body, continue
+        }
+        
+        if (path === 'check-deposits' || body?.action === 'check-deposits') {
           return await checkDeposits()
-        } else if (path === 'check-burns') {
+        } else if (path === 'check-burns' || body?.action === 'check-burns') {
           return await checkBurns()
-        } else if (path === 'process-mint') {
+        } else if (path === 'process-mint' || body?.action === 'process-mint') {
           return await processMint(req)
         }
         break
@@ -244,19 +252,18 @@ async function processDeposit(depositComment: string, txHash: string, amount: st
       return
     }
 
-    // Update user's BIM balance and total deposited
+    // Update user's total deposited and last activity (balances updated by trigger)
     const tonAmount = pendingDeposit.deposit_type === 'TON' ? parseFloat(pendingDeposit.ton_amount) : 0
     const { error: userUpdateError } = await supabase
       .from('users')
       .update({
-        bim_balance: (parseFloat(pendingDeposit.users.bim_balance) + parseFloat(pendingDeposit.bim_amount)).toString(),
         total_deposited: (parseFloat(pendingDeposit.users.total_deposited) + tonAmount).toString(),
         last_activity_at: new Date().toISOString()
       })
       .eq('id', pendingDeposit.user_id)
 
     if (userUpdateError) {
-      console.error(`Failed to update user balance: ${userUpdateError.message}`)
+      console.error(`Failed to update user stats: ${userUpdateError.message}`)
       return
     }
 
@@ -293,8 +300,8 @@ async function handleReferralReward(deposit: any) {
         .eq('status', 'confirmed')
 
       if (depositCount === 1) {
-        // Create referral record
-        await supabase
+        // Create referral record and deposit entry for reward
+        const { data: referralRecord } = await supabase
           .from('referrals')
           .insert({
             referrer_id: deposit.users.referred_by,
@@ -304,23 +311,24 @@ async function handleReferralReward(deposit: any) {
             status: 'completed',
             completed_at: new Date().toISOString()
           })
-
-        // Update referrer's balance
-        const { data: referrer } = await supabase
-          .from('users')
-          .select('bim_balance, total_earned_from_referrals')
-          .eq('id', deposit.users.referred_by)
+          .select()
           .single()
 
-        if (referrer) {
-          await supabase
-            .from('users')
-            .update({
-              bim_balance: (parseFloat(referrer.bim_balance) + referralReward).toString(),
-              total_earned_from_referrals: (parseFloat(referrer.total_earned_from_referrals) + referralReward).toString()
-            })
-            .eq('id', deposit.users.referred_by)
-        }
+        // Create a deposit entry for the referral reward (will trigger balance update)
+        await supabase
+          .from('deposits')
+          .insert({
+            user_id: deposit.users.referred_by,
+            ton_amount: '0',
+            bim_amount: referralReward.toString(),
+            source_type: 'oba_conversion', // Using oba_conversion as it goes to earned_bim_balance
+            deposit_type: 'Referral',
+            deposit_comment: `REFERRAL:REWARD:${referralRecord?.id || Date.now()}`,
+            status: 'confirmed',
+            processed_at: new Date().toISOString()
+          })
+
+        console.log(`Referral reward created: ${referralReward} BIM for referrer ${deposit.users.referred_by}`)
       }
     }
   } catch (error) {

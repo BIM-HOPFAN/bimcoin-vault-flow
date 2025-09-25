@@ -148,33 +148,47 @@ const BalanceCard = ({ onBalancesUpdate }: BalanceCardProps) => {
   const triggerDepositCheck = async () => {
     try {
       console.log('Checking for pending deposits...');
-      const response = await fetch('https://xyskyvwxbpnlveamxwlb.supabase.co/functions/v1/ton-watcher/check-deposits', {
+      const response = await fetch('https://xyskyvwxbpnlveamxwlb.supabase.co/functions/v1/ton-watcher', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
-        }
+        },
+        body: JSON.stringify({ action: 'check-deposits' })
       });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
       const result = await response.json();
       console.log('Deposit check result:', result);
       
-      if (result.processed_deposits > 0) {
-        toast({
-          title: "Deposits Processed",
-          description: `Successfully processed ${result.processed_deposits} deposit(s)! Your BIM balance has been updated.`,
-        });
-        // Refresh balances after processing deposits
-        setTimeout(() => fetchBalances(), 2000);
+      if (result.success) {
+        if (result.processed_deposits > 0) {
+          toast({
+            title: "Deposits Processed Successfully!",
+            description: `Processed ${result.processed_deposits} deposit(s). Your BIM balance has been updated.`,
+          });
+          // Refresh balances after processing deposits
+          setTimeout(() => fetchBalances(), 1000);
+        } else {
+          toast({
+            title: "No New Deposits",
+            description: result.error || "No pending deposits found to process.",
+          });
+        }
       } else {
         toast({
-          title: "No Deposits to Process",
-          description: "No pending deposits found or they are too recent (wait 2 minutes after depositing).",
+          title: "Processing Failed",
+          description: result.error || "Failed to process deposits.",
+          variant: "destructive",
         });
       }
     } catch (error) {
       console.error('Error checking deposits:', error);
       toast({
-        title: "Error Processing Deposits",
-        description: "There was an error processing your deposits. Please try again.",
+        title: "Network Error",
+        description: "Could not connect to deposit processing service. Please try again.",
         variant: "destructive",
       });
     }
