@@ -6,10 +6,13 @@ interface TonConnectProviderProps {
 }
 
 const TonConnectProvider = ({ children }: TonConnectProviderProps) => {
-  console.log('TonConnectProvider: Initializing with basic config');
-  
   return (
-    <TonConnectUIProvider>
+    <TonConnectUIProvider 
+      manifestUrl={`${window.location.origin}/tonconnect-manifest.json`}
+      actionsConfiguration={{
+        twaReturnUrl: 'https://t.me/BIMCoinOfficialBot'
+      }}
+    >
       {children}
     </TonConnectUIProvider>
   );
