@@ -195,10 +195,6 @@ const BalanceCard = ({ onBalancesUpdate }: BalanceCardProps) => {
     }
   }, [address]);
 
-  const handleBurnBIM = () => {
-    // This functionality is now handled by the BIMBurnCard component
-    // We'll remove this button and integrate BIMBurnCard in the main page
-  };
 
   return (
     <Card className="enhanced-card">
@@ -280,16 +276,6 @@ const BalanceCard = ({ onBalancesUpdate }: BalanceCardProps) => {
             className="flex-1 border-border/50 hover:border-primary/30"
           >
             Process Deposits
-          </Button>
-          
-          <Button 
-            onClick={handleBurnBIM}
-            disabled={!address || balances.bim === 0}
-            size="sm"
-            className="flex-1 bg-gradient-secondary text-secondary-foreground hover:opacity-90"
-          >
-            <ArrowUpCircle className="w-4 h-4 mr-2" />
-            Burn BIM
           </Button>
         </div>
       </CardContent>
