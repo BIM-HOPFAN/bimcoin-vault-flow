@@ -7,6 +7,7 @@ import { Users, Copy, Share, Gift } from 'lucide-react';
 import { useTonAddress } from '@tonconnect/ui-react';
 import { useToast } from '@/hooks/use-toast';
 import { bimCoinAPI } from '@/lib/api';
+import { formatLargeNumber } from '@/lib/utils';
 
 const ReferralCard = () => {
   const [referralCount, setReferralCount] = useState(0);
@@ -103,7 +104,7 @@ const ReferralCard = () => {
               <span className="text-sm font-medium">Earned OBA</span>
             </div>
             <div className="text-2xl font-bold text-warning">
-              {earnedFromReferrals.toFixed(2)}
+              {formatLargeNumber(earnedFromReferrals)}
             </div>
           </div>
         </div>

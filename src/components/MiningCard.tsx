@@ -6,6 +6,7 @@ import { Pickaxe, Gem, Clock } from 'lucide-react';
 import { useTonAddress } from '@tonconnect/ui-react';
 import { useToast } from '@/hooks/use-toast';
 import { bimCoinAPI } from '@/lib/api';
+import { formatLargeNumber } from '@/lib/utils';
 
 const MiningCard = () => {
   const [mining, setMining] = useState(false);
@@ -217,7 +218,7 @@ const MiningCard = () => {
               <span className="text-sm font-medium">Earned OBA</span>
             </div>
             <div className="text-lg font-bold text-secondary">
-              {earnedOBA.toFixed(4)}
+              {formatLargeNumber(earnedOBA, 4)}
             </div>
           </div>
           

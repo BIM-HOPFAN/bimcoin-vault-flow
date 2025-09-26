@@ -5,6 +5,7 @@ import { Wallet, TrendingUp, RefreshCw } from 'lucide-react';
 import { useTonAddress } from '@tonconnect/ui-react';
 import { useToast } from '@/hooks/use-toast';
 import { bimCoinAPI } from '@/lib/api';
+import { formatLargeNumber } from '@/lib/utils';
 
 interface Balances {
   ton: number;
@@ -227,7 +228,7 @@ const BalanceCard = ({ onBalancesUpdate }: BalanceCardProps) => {
           <div className="text-center space-y-1">
             <div className="text-sm text-muted-foreground">TON</div>
             <div className="text-lg font-bold text-primary">
-              {address ? balances.ton.toFixed(2) : '0.00'}
+              {address ? formatLargeNumber(balances.ton) : '0.00'}
             </div>
           </div>
 
@@ -235,7 +236,7 @@ const BalanceCard = ({ onBalancesUpdate }: BalanceCardProps) => {
           <div className="text-center space-y-1">
             <div className="text-xs text-muted-foreground">BIM (App)</div>
             <div className="text-lg font-bold text-secondary">
-              {address ? balances.bim.toFixed(2) : '0.00'}
+              {address ? formatLargeNumber(balances.bim) : '0.00'}
             </div>
           </div>
 
@@ -243,7 +244,7 @@ const BalanceCard = ({ onBalancesUpdate }: BalanceCardProps) => {
           <div className="text-center space-y-1">
             <div className="text-xs text-muted-foreground">Bimcoin</div>
             <div className="text-lg font-bold text-green-400">
-              {address ? balances.realBimcoin.toLocaleString() : '0'}
+              {address ? formatLargeNumber(balances.realBimcoin, 0) : '0'}
             </div>
           </div>
 
@@ -251,7 +252,7 @@ const BalanceCard = ({ onBalancesUpdate }: BalanceCardProps) => {
           <div className="text-center space-y-1">
             <div className="text-sm text-muted-foreground">OBA</div>
             <div className="text-lg font-bold text-warning">
-              {address ? balances.oba.toFixed(2) : '0.00'}
+              {address ? formatLargeNumber(balances.oba) : '0.00'}
             </div>
           </div>
         </div>
@@ -265,9 +266,9 @@ const BalanceCard = ({ onBalancesUpdate }: BalanceCardProps) => {
             </div>
           </div>
           <div className="text-2xl font-bold">
-            ${address ? ((balances.ton * tonPrice) + (balances.bim * tonPrice * 0.005) + (balances.oba * tonPrice * 0.005 * 0.005)).toFixed(2) : '0.00'}
+            ${address ? formatLargeNumber((balances.ton * tonPrice) + (balances.bim * tonPrice * 0.005) + (balances.oba * tonPrice * 0.005 * 0.005)) : '0.00'}
           </div>
-          <div className="text-sm text-muted-foreground">≈ {address ? (balances.ton + (balances.bim * 0.005) + (balances.oba * 0.005 * 0.005)).toFixed(4) : '0.00'} TON</div>
+          <div className="text-sm text-muted-foreground">≈ {address ? formatLargeNumber(balances.ton + (balances.bim * 0.005) + (balances.oba * 0.005 * 0.005), 4) : '0.00'} TON</div>
         </div>
 
         <div className="flex gap-2">

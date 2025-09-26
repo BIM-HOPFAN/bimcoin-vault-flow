@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,6 +7,7 @@ import { Flame, ArrowRightLeft, Coins } from 'lucide-react';
 import { useTonAddress } from '@tonconnect/ui-react';
 import { useToast } from '@/hooks/use-toast';
 import { bimCoinAPI } from '@/lib/api';
+import { formatLargeNumber } from '@/lib/utils';
 
 interface OBABurnCardProps {
   obaBalance: number;
@@ -100,13 +101,13 @@ const OBABurnCard = ({ obaBalance, bimBalance, onBalanceUpdate }: OBABurnCardPro
           <div className="text-center">
             <div className="text-sm text-muted-foreground">OBA Balance</div>
             <div className="text-lg font-bold text-secondary">
-              {obaBalance.toFixed(4)}
+              {formatLargeNumber(obaBalance, 4)}
             </div>
           </div>
           <div className="text-center">
             <div className="text-sm text-muted-foreground">BIM Balance</div>
             <div className="text-lg font-bold text-primary">
-              {bimBalance.toFixed(4)}
+              {formatLargeNumber(bimBalance, 4)}
             </div>
           </div>
         </div>
@@ -143,12 +144,12 @@ const OBABurnCard = ({ obaBalance, bimBalance, onBalanceUpdate }: OBABurnCardPro
             <div className="flex items-center justify-center gap-2 p-3 bg-accent/50 rounded-lg">
               <div className="text-center">
                 <div className="text-sm text-muted-foreground">You burn</div>
-                <div className="font-semibold">{parseFloat(burnAmount).toFixed(4)} OBA</div>
+                <div className="font-semibold">{formatLargeNumber(parseFloat(burnAmount), 4)} OBA</div>
               </div>
               <ArrowRightLeft className="w-4 h-4 text-muted-foreground" />
               <div className="text-center">
                 <div className="text-sm text-muted-foreground">You receive</div>
-                <div className="font-semibold text-primary">{bimReceived.toFixed(4)} BIM</div>
+                <div className="font-semibold text-primary">{formatLargeNumber(bimReceived, 4)} BIM</div>
               </div>
             </div>
           )}
