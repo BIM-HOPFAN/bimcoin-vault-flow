@@ -455,6 +455,35 @@ export type Database = {
         Args: { user_uuid: string }
         Returns: number
       }
+      get_public_leaderboard: {
+        Args: { limit_count?: number }
+        Returns: {
+          bim_balance: number
+          total_deposited: number
+          wallet_address: string
+        }[]
+      }
+      get_user_by_wallet: {
+        Args: { wallet_addr: string }
+        Returns: {
+          bim_balance: number
+          created_at: string
+          deposit_bim_balance: number
+          earned_bim_balance: number
+          id: string
+          is_active: boolean
+          last_activity_at: string
+          oba_balance: number
+          referral_code: string
+          referred_by: string
+          total_deposited: number
+          total_earned_from_referrals: number
+          total_earned_from_tasks: number
+          total_mined: number
+          updated_at: string
+          wallet_address: string
+        }[]
+      }
     }
     Enums: {
       deposit_status: "pending" | "confirmed" | "failed"

@@ -88,16 +88,16 @@ async function getUserProfile(params: URLSearchParams) {
   }
 
   const { data: user, error } = await supabase
-    .from('users')
-    .select('*')
-    .eq('wallet_address', walletAddress)
-    .single()
+    .rpc('get_user_by_wallet', { wallet_addr: walletAddress })
 
-  if (error && error.code !== 'PGRST116') {
+  if (error) {
     throw error
   }
 
-  return new Response(JSON.stringify({ user }), {
+  // Return first user if array is returned, or null if no user found
+  const userData = Array.isArray(user) ? (user.length > 0 ? user[0] : null) : user
+
+  return new Response(JSON.stringify({ user: userData }), {
     headers: { ...corsHeaders, 'Content-Type': 'application/json' }
   })
 }
@@ -241,11 +241,7 @@ async function getLeaderboard(params: URLSearchParams) {
   const limit = parseInt(params.get('limit') || '10')
   
   const { data: leaderboard, error } = await supabase
-    .from('users')
-    .select('wallet_address, bim_balance, oba_balance, total_deposited')
-    .eq('is_active', true)
-    .order('bim_balance', { ascending: false })
-    .limit(limit)
+    .rpc('get_public_leaderboard', { limit_count: limit })
 
   if (error) {
     throw error
