@@ -19,7 +19,7 @@ const ReferralCard = () => {
 
   const referralLink = address && referralCode
     ? `${window.location.origin}?ref=${referralCode}`
-    : 'Connect wallet to get referral link';
+    : address ? 'Loading referral link...' : 'Connect wallet to get referral link';
 
   // Fetch user stats including referral data
   const fetchUserStats = async () => {
@@ -46,6 +46,18 @@ const ReferralCard = () => {
   useEffect(() => {
     if (address) {
       fetchUserStats();
+      // Also ensure we have the latest referral code
+      const fetchReferralCode = async () => {
+        try {
+          const profile = await bimCoinAPI.getUserProfile(address);
+          if (profile.success && profile.data) {
+            setReferralCode(profile.data.referral_code || '');
+          }
+        } catch (error) {
+          console.error('Failed to fetch referral code:', error);
+        }
+      };
+      fetchReferralCode();
     } else {
       setReferralCount(0);
       setEarnedFromReferrals(0);
