@@ -20,10 +20,12 @@ A modern React-based decentralized application built on The Open Network (TON) b
 
 ### 🔧 Technical Stack
 - **Frontend**: React 18 + TypeScript + Vite
+- **Backend**: Supabase with PostgreSQL database and Edge Functions
 - **Styling**: Tailwind CSS with custom design tokens
 - **TON Integration**: @tonconnect/ui-react, @ton/ton, @ton/crypto
 - **State Management**: TanStack Query for async state
 - **UI Components**: Radix UI primitives with shadcn/ui
+- **Security**: Row Level Security (RLS) policies and secure API endpoints
 
 ## Getting Started
 
@@ -58,12 +60,30 @@ src/
 │   ├── ReferralCard.tsx    # Referral program interface
 │   ├── BalanceCard.tsx     # Portfolio balance display
 │   ├── HeroSection.tsx     # Landing page hero
+│   ├── BIMBurnCard.tsx     # BIM token burning interface
+│   ├── OBABurnCard.tsx     # OBA token burning interface
 │   └── TonConnectProvider.tsx     # TON connection provider
 ├── pages/
-│   └── Index.tsx           # Main application page
-├── hooks/                  # Custom React hooks
-├── lib/                    # Utility functions
+│   ├── Index.tsx           # Main application page
+│   ├── Admin.tsx           # Admin dashboard
+│   ├── Privacy.tsx         # Privacy policy page
+│   └── Terms.tsx           # Terms of service page
+├── hooks/
+│   ├── useReferral.ts      # Referral code handling hook
+│   └── use-mobile.tsx      # Mobile detection hook
+├── lib/                    # Utility functions and API clients
 └── index.css              # Design system and global styles
+
+supabase/
+├── functions/
+│   ├── deposit-api/        # Handles TON deposits and BIM minting
+│   ├── mining-api/         # Manages OBA mining sessions
+│   ├── task-api/           # Task management and completion
+│   ├── user-api/           # User profile and balance management
+│   ├── burn-api/           # Token burning operations
+│   ├── jetton-minter/      # Jetton contract deployment and minting
+│   └── ton-watcher/        # Blockchain event monitoring
+└── migrations/             # Database schema and RLS policies
 ```
 
 ## Token Economics
@@ -125,14 +145,34 @@ All styles are defined in `src/index.css` using CSS custom properties:
 - Local state for UI interactions
 - Toast notifications for user feedback
 
-## Backend Integration (Future)
+## Backend Architecture
 
-This frontend is designed to work with a Node.js backend featuring:
+The application features a fully implemented Supabase backend with the following components:
 
-- **Express.js API**: RESTful endpoints for deposits, mining, tasks
-- **MongoDB**: User data, transactions, and analytics storage
-- **TON Watchers**: Blockchain event monitoring
-- **Security**: Rate limiting, API authentication, pause functionality
+### 🔄 Edge Functions (Serverless APIs)
+- **deposit-api**: Handles TON deposit intents, processes confirmed deposits, manages referral rewards
+- **mining-api**: Manages OBA mining sessions (start, claim, status, history)
+- **task-api**: Task management system with verification logic for social/trading tasks
+- **user-api**: User profile management, balance tracking, and portfolio analytics
+- **burn-api**: Token burning operations for BIM and OBA tokens
+- **jetton-minter**: Jetton contract deployment and token minting operations
+- **ton-watcher**: Real-time blockchain event monitoring and transaction processing
+
+### 🗄️ Database Schema (PostgreSQL)
+- **users**: Wallet addresses, balances, activity tracking, referral relationships
+- **deposits**: Deposit history, transaction hashes, confirmation status
+- **mining_sessions**: Mining start/end times, earnings, session status
+- **tasks**: Task definitions, rewards, verification requirements
+- **user_tasks**: Task completion tracking and reward distribution
+- **referrals**: Referral relationships and reward history
+- **config**: System configuration, rates, addresses
+
+### 🔒 Security Features
+- **Row Level Security (RLS)**: All tables protected with user-specific access policies
+- **Secure Mining Access**: Users can only view/modify their own mining sessions
+- **Referral Protection**: Prevents duplicate rewards and validates referral chains
+- **Transaction Validation**: Comprehensive verification of all blockchain transactions
+- **Rate Limiting**: Built-in protection against API abuse
 
 ## Deployment
 
@@ -151,12 +191,27 @@ Create appropriate environment files for:
 - API endpoints and authentication
 - Monitoring and analytics services
 
-## Security Considerations
+## Security Implementation
 
+### 🔐 Frontend Security
 - **Client-Side**: No private keys stored in frontend
 - **Transactions**: User signs all transactions via wallet
-- **API Communication**: Secure HTTPS endpoints
 - **Input Validation**: Comprehensive validation on all user inputs
+- **Secure Communication**: All API calls use HTTPS with proper authentication
+
+### 🛡️ Backend Security (Recently Enhanced)
+- **Row Level Security**: Every database table has RLS policies restricting access to user's own data
+- **Mining Session Protection**: Users can only access their own mining sessions and earnings
+- **Referral System Security**: Prevents double-spending and validates referral relationships
+- **Transaction Verification**: All blockchain transactions are verified before processing
+- **Admin Controls**: Separate admin policies for system management
+- **API Rate Limiting**: Protection against abuse and spam requests
+
+### 🔍 Recent Security Updates
+- Fixed overly permissive mining_sessions policies that allowed unauthorized data access
+- Implemented user-specific data isolation across all tables
+- Added comprehensive input validation for all API endpoints
+- Enhanced referral system to prevent reward manipulation
 
 ## Contributing
 
