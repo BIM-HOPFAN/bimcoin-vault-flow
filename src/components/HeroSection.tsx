@@ -1,5 +1,6 @@
 import { Button } from '@/components/ui/button';
 import { ArrowRight, Sparkles, Zap, Shield } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import WalletConnectButton from './WalletConnectButton';
 
 const HeroSection = () => {
@@ -31,14 +32,16 @@ const HeroSection = () => {
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-12">
           <WalletConnectButton />
-          <Button 
-            variant="outline" 
-            size="lg"
-            className="border-border/50 hover:border-primary/30 enhanced-card"
-          >
-            Learn More
-            <ArrowRight className="w-4 h-4 ml-2" />
-          </Button>
+          <Link to="/whitepaper">
+            <Button 
+              variant="outline" 
+              size="lg"
+              className="border-border/50 hover:border-primary/30 enhanced-card"
+            >
+              Learn More
+              <ArrowRight className="w-4 h-4 ml-2" />
+            </Button>
+          </Link>
         </div>
 
         {/* Feature highlights */}
