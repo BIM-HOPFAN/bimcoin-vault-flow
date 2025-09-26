@@ -3,10 +3,24 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Link } from 'react-router-dom';
+import html2pdf from 'html2pdf.js';
 
 const Whitepaper = () => {
+  const downloadPDF = () => {
+    const element = document.getElementById('whitepaper-content');
+    const opt = {
+      margin: 1,
+      filename: 'bimcoin-whitepaper.pdf',
+      image: { type: 'jpeg' as const, quality: 0.98 },
+      html2canvas: { scale: 2 },
+      jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' as const }
+    };
+    
+    html2pdf().set(opt).from(element).save();
+  };
+
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background" id="whitepaper-content">
       {/* Navigation */}
       <nav className="sticky top-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-lg">
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
@@ -26,7 +40,7 @@ const Whitepaper = () => {
                 Back to App
               </Button>
             </Link>
-            <Button variant="outline" size="sm">
+            <Button variant="outline" size="sm" onClick={downloadPDF}>
               <Download className="w-4 h-4 mr-2" />
               Download PDF
             </Button>
