@@ -37,9 +37,11 @@ const Index = () => {
       <nav className="sticky top-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-lg">
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-primary flex items-center justify-center">
-              <span className="text-sm font-bold text-primary-foreground">B</span>
-            </div>
+            <img 
+              src="/bim-icon.png" 
+              alt="Bimcoin Logo" 
+              className="w-8 h-8 rounded-lg"
+            />
             <span className="text-xl font-bold gradient-text">Bimcoin</span>
           </div>
           
