@@ -1,36 +1,54 @@
-# Bimcoin TON DeFi Protocol
+# BimCoin TON DeFi Protocol
 
-A modern React-based decentralized application built on The Open Network (TON) blockchain for earning BIM and OBA tokens through deposits, mining, tasks, and referrals.
+A comprehensive decentralized finance application built on The Open Network (TON) blockchain, featuring token deposits, passive mining, task completion, and referral rewards.
 
-## Features
+## Overview
 
-### 🌟 Core Functionality
-- **TON Wallet Integration**: Connect via TonConnect UI with support for Tonkeeper and MyTonWallet
-- **Token Deposits**: Deposit TON to mint Bimcoin tokens (1 TON = 1,000 BIM)
-- **OBA Mining**: Earn 50% OBA tokens daily through passive mining
-- **Task System**: Complete social and trading tasks for 3% OBA daily rewards
-- **Referral Program**: Earn 2% OBA on friend deposits with 365-day activity window
-- **Portfolio Tracking**: Real-time balance display and portfolio analytics
+BimCoin is a DeFi protocol that allows users to deposit TON tokens to mint BIM tokens and earn OBA rewards through various activities including passive mining, task completion, and referrals. The platform provides a seamless Web3 experience with modern UI/UX design.
 
-### 🎨 Design System
-- **Modern DeFi Interface**: Dark theme with TON blue and gold accents
-- **Responsive Design**: Mobile-first approach with beautiful gradients
-- **Smooth Animations**: Enhanced user experience with floating elements and glow effects
-- **Component Library**: Built with shadcn/ui and Tailwind CSS
+## Key Features
 
-### 🔧 Technical Stack
-- **Frontend**: React 18 + TypeScript + Vite
-- **Backend**: Supabase with PostgreSQL database and Edge Functions
-- **Styling**: Tailwind CSS with custom design tokens
+### 💰 Token System
+- **BIM Token**: Primary ecosystem token (1 TON = 1,000 BIM)
+- **OBA Token**: Reward token earned through platform activities
+- **Token Burning**: Convert BIM/OBA back to TON
+
+### ⛏️ Mining & Rewards
+- **Passive Mining**: Earn 50% OBA daily on active BIM deposits
+- **Task Rewards**: Complete social and trading tasks for 3% OBA daily
+- **Referral Program**: Earn 2% OBA on friend deposits
+
+### 🔗 TON Integration
+- **Wallet Support**: TonConnect integration with Tonkeeper, MyTonWallet
+- **Smart Contracts**: Jetton standard (TEP-74) implementation
+- **Real-time Tracking**: Blockchain transaction monitoring
+
+### 🎨 User Experience
+- **Modern Interface**: Dark theme with TON blue and gold accents
+- **Responsive Design**: Mobile-first approach
+- **Real-time Updates**: Live balance and mining status
+- **Smooth Animations**: Enhanced visual feedback
+
+## Tech Stack
+
+### Frontend
+- **React 18** + TypeScript + Vite
+- **Styling**: Tailwind CSS with custom design system
+- **UI Components**: shadcn/ui + Radix UI primitives
+- **State Management**: TanStack Query
 - **TON Integration**: @tonconnect/ui-react, @ton/ton, @ton/crypto
-- **State Management**: TanStack Query for async state
-- **UI Components**: Radix UI primitives with shadcn/ui
-- **Security**: Row Level Security (RLS) policies and secure API endpoints
+
+### Backend (Supabase)
+- **Database**: PostgreSQL with Row Level Security
+- **API**: Supabase Edge Functions (Deno runtime)
+- **Authentication**: Built-in user management
+- **Real-time**: Subscriptions and live updates
 
 ## Getting Started
 
 ### Prerequisites
-- Node.js 18+ and npm
+- Node.js 18 or higher
+- npm or yarn package manager
 - TON wallet (Tonkeeper or MyTonWallet recommended)
 
 ### Installation
@@ -38,7 +56,7 @@ A modern React-based decentralized application built on The Open Network (TON) b
 ```bash
 # Clone the repository
 git clone <repository-url>
-cd bimcoin-ton-dapp
+cd bimcoin-dapp
 
 # Install dependencies
 npm install
@@ -47,192 +65,228 @@ npm install
 npm run dev
 ```
 
-### Project Structure
+The application will be available at `http://localhost:5173`
+
+### Environment Setup
+
+The application uses Supabase for backend services. Configuration is handled through:
+- `src/integrations/supabase/client.ts` - Database connection
+- `.env` - Environment variables (if needed)
+
+## Project Structure
 
 ```
 src/
 ├── components/
-│   ├── ui/                 # shadcn/ui components
-│   ├── WalletConnectButton.tsx    # TON wallet connection
-│   ├── DepositCard.tsx     # TON deposit interface
-│   ├── MiningCard.tsx      # OBA mining dashboard
-│   ├── TaskCard.tsx        # Task completion system
-│   ├── ReferralCard.tsx    # Referral program interface
-│   ├── BalanceCard.tsx     # Portfolio balance display
-│   ├── HeroSection.tsx     # Landing page hero
-│   ├── BIMBurnCard.tsx     # BIM token burning interface
-│   ├── OBABurnCard.tsx     # OBA token burning interface
-│   └── TonConnectProvider.tsx     # TON connection provider
+│   ├── ui/                    # shadcn/ui component library
+│   ├── WalletConnectButton.tsx    # TON wallet integration
+│   ├── DepositCard.tsx        # Deposit interface
+│   ├── MiningCard.tsx         # Mining dashboard
+│   ├── TaskCard.tsx           # Task management
+│   ├── ReferralCard.tsx       # Referral system
+│   ├── BalanceCard.tsx        # Portfolio tracking
+│   ├── BIMBurnCard.tsx        # BIM burning interface
+│   ├── OBABurnCard.tsx        # OBA conversion
+│   ├── HeroSection.tsx        # Landing hero
+│   └── TonConnectProvider.tsx # TON connection wrapper
 ├── pages/
-│   ├── Index.tsx           # Main application page
-│   ├── Admin.tsx           # Admin dashboard
-│   ├── Privacy.tsx         # Privacy policy page
-│   └── Terms.tsx           # Terms of service page
+│   ├── Index.tsx              # Main application
+│   ├── Admin.tsx              # Admin dashboard
+│   ├── Terms.tsx              # Terms of service
+│   ├── Privacy.tsx            # Privacy policy
+│   └── Whitepaper.tsx         # Technical documentation
 ├── hooks/
-│   ├── useReferral.ts      # Referral code handling hook
-│   └── use-mobile.tsx      # Mobile detection hook
-├── lib/                    # Utility functions and API clients
-└── index.css              # Design system and global styles
+│   ├── useReferral.ts         # Referral management
+│   └── use-mobile.tsx         # Mobile detection
+├── lib/
+│   ├── api.ts                 # API client
+│   └── utils.ts               # Utility functions
+└── integrations/supabase/     # Database integration
 
 supabase/
 ├── functions/
-│   ├── deposit-api/        # Handles TON deposits and BIM minting
-│   ├── mining-api/         # Manages OBA mining sessions
-│   ├── task-api/           # Task management and completion
-│   ├── user-api/           # User profile and balance management
-│   ├── burn-api/           # Token burning operations
-│   ├── jetton-minter/      # Jetton contract deployment and minting
-│   └── ton-watcher/        # Blockchain event monitoring
-└── migrations/             # Database schema and RLS policies
+│   ├── user-api/              # User management
+│   ├── deposit-api/           # Deposit processing
+│   ├── mining-api/            # Mining operations
+│   ├── task-api/              # Task system
+│   ├── burn-api/              # Token burning
+│   ├── jetton-minter/         # Token minting
+│   └── ton-watcher/           # Blockchain monitoring
+└── migrations/                # Database schema
 ```
 
 ## Token Economics
 
-### Bimcoin (BIM)
-- **Minting**: 1 TON = 1,000 BIM tokens
-- **Burning**: Convert BIM back to TON (configurable rate)
-- **Usage**: Primary token for ecosystem participation
+### BIM Token (Primary)
+- **Minting Rate**: 1 TON = 1,000 BIM
+- **Purpose**: Ecosystem participation and rewards
+- **Burning**: Convert back to TON (configurable exchange rate)
 
-### OBA Rewards
-- **Mining**: 50% OBA per day (continuous stream)
-- **Tasks**: 3% OBA daily for completed activities
-- **Referrals**: 2% OBA on valid friend deposits
-- **Activity Window**: 365-day participation tracking
+### OBA Token (Rewards)
+- **Mining**: 50% daily yield on active BIM deposits
+- **Tasks**: 3% daily rewards for completed activities
+- **Referrals**: 2% rewards on successful referrals
+- **Activity Window**: 365-day reward eligibility
 
-## Smart Contract Integration
+## Smart Contracts
 
-### Jetton Master
-- **Contract**: `EQBiJdfXqgRRO0asz71X0MBhS8__FY_Kc9bq6d7o-dVDshja`
+### Jetton Master Contract
+- **Address**: `EQBiJdfXqgRRO0asz71X0MBhS8__FY_Kc9bq6d7o-dVDshja`
 - **Standard**: TON Jetton (TEP-74)
-- **Functions**: Mint/burn Bimcoin tokens
+- **Functions**: Token minting, burning, and transfers
 
 ### Treasury Operations
-- **Deposits**: Tracked via comment `BIM:DEPOSIT:<uuid>`
-- **Withdrawals**: Automatic TON payouts on burn events
-- **Security**: Admin wallet controls minting operations
+- **Deposit Tracking**: Unique comment format `BIM:DEPOSIT:<uuid>`
+- **Automatic Processing**: Real-time deposit confirmation
+- **Withdrawal System**: Automated TON payouts on burns
 
-## Wallet Connection
+## Backend Architecture
 
-The app supports multiple TON wallets through TonConnect:
+### Edge Functions (Serverless APIs)
+Each function handles specific business logic:
 
-- **Tonkeeper**: Mobile and browser extension
-- **MyTonWallet**: Cross-platform wallet solution
-- **Custom Integration**: Easy to add more wallets
+- **user-api**: Profile management, balance tracking, leaderboard
+- **deposit-api**: TON deposit processing, BIM minting, referral rewards
+- **mining-api**: Mining session management (start/claim/status/history)
+- **task-api**: Task completion, verification, reward distribution
+- **burn-api**: Token burning operations (BIM/OBA to TON)
+- **jetton-minter**: Smart contract interactions, token minting
+- **ton-watcher**: Blockchain event monitoring, transaction verification
+
+### Database Schema
+PostgreSQL tables with comprehensive RLS policies:
+
+- **users**: Wallet addresses, balances, activity tracking
+- **deposits**: Transaction history, confirmation status
+- **mining_sessions**: Active mining tracking, earnings calculation
+- **tasks**: Task definitions, verification requirements
+- **user_tasks**: Completion tracking, reward distribution
+- **referrals**: Referral relationships, reward history
+- **burns**: Token burning history, payout tracking
+- **config**: System configuration, exchange rates
+
+## Security Implementation
+
+### Frontend Security
+- **No Private Keys**: All signing done via wallet
+- **Input Validation**: Comprehensive client-side validation
+- **Secure Communication**: HTTPS-only API communication
+- **Error Handling**: Graceful error states and user feedback
+
+### Backend Security
+- **Row Level Security**: Database-level access control
+- **User Isolation**: Each user can only access their own data
+- **Transaction Verification**: All blockchain interactions verified
+- **Rate Limiting**: API abuse protection
+- **Referral Protection**: Prevents duplicate rewards and manipulation
+
+### Recent Security Updates
+- ✅ Fixed mining session access policies
+- ✅ Implemented user-specific data isolation
+- ✅ Enhanced referral system security
+- ✅ Added comprehensive input validation
+- ✅ Secured all RLS policies against unauthorized access
 
 ## Development
 
 ### Design System
-All styles are defined in `src/index.css` using CSS custom properties:
+The application uses a custom design system defined in `src/index.css`:
 
 ```css
 :root {
   --primary: 215 100% 60%;        /* TON Blue */
   --secondary: 45 100% 60%;       /* BIM Gold */
-  --gradient-primary: linear-gradient(135deg, ...);
-  --shadow-primary: 0 10px 40px -10px ...;
+  --accent: 280 100% 70%;         /* Purple accent */
+  /* Gradients, shadows, and animations */
 }
 ```
 
 ### Component Guidelines
-- Use semantic design tokens (never hardcode colors)
-- Implement proper error handling and loading states
-- Follow TON transaction patterns with proper validation
-- Maintain responsive design across all screen sizes
+- Use semantic design tokens (no hardcoded colors)
+- Implement proper loading and error states
+- Follow responsive design principles
+- Maintain consistent TON branding
 
 ### State Management
-- TonConnect for wallet state
-- React Query for async operations
-- Local state for UI interactions
-- Toast notifications for user feedback
-
-## Backend Architecture
-
-The application features a fully implemented Supabase backend with the following components:
-
-### 🔄 Edge Functions (Serverless APIs)
-- **deposit-api**: Handles TON deposit intents, processes confirmed deposits, manages referral rewards
-- **mining-api**: Manages OBA mining sessions (start, claim, status, history)
-- **task-api**: Task management system with verification logic for social/trading tasks
-- **user-api**: User profile management, balance tracking, and portfolio analytics
-- **burn-api**: Token burning operations for BIM and OBA tokens
-- **jetton-minter**: Jetton contract deployment and token minting operations
-- **ton-watcher**: Real-time blockchain event monitoring and transaction processing
-
-### 🗄️ Database Schema (PostgreSQL)
-- **users**: Wallet addresses, balances, activity tracking, referral relationships
-- **deposits**: Deposit history, transaction hashes, confirmation status
-- **mining_sessions**: Mining start/end times, earnings, session status
-- **tasks**: Task definitions, rewards, verification requirements
-- **user_tasks**: Task completion tracking and reward distribution
-- **referrals**: Referral relationships and reward history
-- **config**: System configuration, rates, addresses
-
-### 🔒 Security Features
-- **Row Level Security (RLS)**: All tables protected with user-specific access policies
-- **Secure Mining Access**: Users can only view/modify their own mining sessions
-- **Referral Protection**: Prevents duplicate rewards and validates referral chains
-- **Transaction Validation**: Comprehensive verification of all blockchain transactions
-- **Rate Limiting**: Built-in protection against API abuse
+- **Wallet State**: TonConnect provider
+- **API Data**: TanStack Query for caching
+- **Local State**: React hooks for UI interactions
+- **Notifications**: Toast system for user feedback
 
 ## Deployment
 
-### Frontend Deployment
+### Production Build
 ```bash
-# Build for production
+# Build optimized production bundle
 npm run build
 
-# Preview build locally
+# Preview production build locally
 npm run preview
 ```
 
 ### Environment Configuration
-Create appropriate environment files for:
-- TON network endpoints (mainnet/testnet)
-- API endpoints and authentication
-- Monitoring and analytics services
+- Configure TON network endpoints (mainnet/testnet)
+- Set up Supabase connection details
+- Configure monitoring and analytics
 
-## Security Implementation
+## API Documentation
 
-### 🔐 Frontend Security
-- **Client-Side**: No private keys stored in frontend
-- **Transactions**: User signs all transactions via wallet
-- **Input Validation**: Comprehensive validation on all user inputs
-- **Secure Communication**: All API calls use HTTPS with proper authentication
+### User Management
+- `GET /user-api/profile` - Get user profile
+- `POST /user-api/register` - Register new user
+- `GET /user-api/stats` - Get user statistics
 
-### 🛡️ Backend Security (Recently Enhanced)
-- **Row Level Security**: Every database table has RLS policies restricting access to user's own data
-- **Mining Session Protection**: Users can only access their own mining sessions and earnings
-- **Referral System Security**: Prevents double-spending and validates referral relationships
-- **Transaction Verification**: All blockchain transactions are verified before processing
-- **Admin Controls**: Separate admin policies for system management
-- **API Rate Limiting**: Protection against abuse and spam requests
+### Deposits
+- `POST /deposit-api/create-intent` - Create deposit intent
+- `GET /deposit-api/history` - Get deposit history
+- `GET /deposit-api/status` - Check deposit status
 
-### 🔍 Recent Security Updates
-- Fixed overly permissive mining_sessions policies that allowed unauthorized data access
-- Implemented user-specific data isolation across all tables
-- Added comprehensive input validation for all API endpoints
-- **Fixed critical referral system vulnerability**: Replaced unrestricted access policy with secure RLS policies that only allow users to view referrals where they are the referrer/referee, and restrict all data modifications to backend functions only
-- Enhanced referral system to prevent reward manipulation
+### Mining
+- `POST /mining-api/start` - Start mining session
+- `POST /mining-api/claim` - Claim mining rewards
+- `GET /mining-api/status` - Get mining status
+
+### Tasks
+- `GET /task-api/available` - List available tasks
+- `POST /task-api/complete` - Complete task
+- `GET /task-api/user-history` - Get user task history
 
 ## Contributing
 
-1. Fork the repository
-2. Create a feature branch
-3. Follow the existing code style and design patterns
-4. Add proper TypeScript types and error handling
-5. Test across different wallets and screen sizes
-6. Submit a pull request with clear description
+1. **Fork** the repository
+2. **Create** a feature branch (`git checkout -b feature/amazing-feature`)
+3. **Follow** existing code style and patterns
+4. **Add** proper TypeScript types
+5. **Test** across different wallets and devices
+6. **Commit** changes (`git commit -m 'Add amazing feature'`)
+7. **Push** to branch (`git push origin feature/amazing-feature`)
+8. **Open** a Pull Request
+
+### Code Standards
+- TypeScript for type safety
+- ESLint for code quality
+- Prettier for formatting
+- Conventional commits for git history
+
+## Support & Resources
+
+### Documentation
+- [TON Blockchain](https://ton.org)
+- [TonConnect Documentation](https://docs.ton.org/develop/dapps/ton-connect/overview)
+- [Jetton Standard (TEP-74)](https://github.com/ton-blockchain/TEPs/blob/master/text/0074-jettons-standard.md)
+- [Supabase Documentation](https://supabase.com/docs)
+
+### Community
+- TON Developer Chat
+- BimCoin Community Discord
+- GitHub Issues for bug reports
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## Links
-
-- **TON Blockchain**: https://ton.org
-- **TonConnect**: https://docs.ton.org/develop/dapps/ton-connect/overview
-- **Jetton Standard**: https://github.com/ton-blockchain/TEPs/blob/master/text/0074-jettons-standard.md
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
 
 ---
 
-Built with ❤️ for the TON ecosystem
+**Built with ❤️ for the TON ecosystem**
+
+*Empowering decentralized finance through innovative token mechanics and user-centric design.*
