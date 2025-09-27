@@ -104,10 +104,20 @@ export const BIMBurnCard: React.FC<BIMBurnCardProps> = ({
 
     try {
       const preview = await bimCoinAPI.getBurnPreview(address, parseFloat(amount));
-      if (preview.success) {
-        setBurnPreview(preview.preview);
-        setShowPenaltyWarning(preview.preview.penalty_amount > 0);
+      if (preview.success && preview.preview) {
+        // Ensure all required properties exist with fallback values
+        const safePreview = {
+          deposit_bim_balance: preview.preview.deposit_bim_balance || 0,
+          earned_bim_balance: preview.preview.earned_bim_balance || 0,
+          penalty_amount: preview.preview.penalty_amount || 0,
+          final_ton_amount: preview.preview.final_ton_amount || 0,
+          original_ton_amount: preview.preview.original_ton_amount || 0,
+          ...preview.preview
+        };
+        setBurnPreview(safePreview);
+        setShowPenaltyWarning((safePreview.penalty_amount || 0) > 0);
       } else {
+        console.warn('Invalid preview response:', preview);
         setBurnPreview(null);
         setShowPenaltyWarning(false);
       }
@@ -203,9 +213,9 @@ export const BIMBurnCard: React.FC<BIMBurnCardProps> = ({
               <span className="text-sm font-medium">⚠️ Early Burn Penalty</span>
             </div>
             <div className="text-xs text-muted-foreground space-y-1">
-              <div>Deposit BIM Balance: {burnPreview.deposit_bim_balance.toFixed(4)} BIM</div>
-              <div>Earned BIM Balance: {burnPreview.earned_bim_balance.toFixed(4)} BIM</div>
-              <div>Penalty Amount: {burnPreview.penalty_amount.toFixed(4)} BIM (50%)</div>
+              <div>Deposit BIM Balance: {(burnPreview.deposit_bim_balance || 0).toFixed(4)} BIM</div>
+              <div>Earned BIM Balance: {(burnPreview.earned_bim_balance || 0).toFixed(4)} BIM</div>
+              <div>Penalty Amount: {(burnPreview.penalty_amount || 0).toFixed(4)} BIM (50%)</div>
             </div>
           </div>
         )}
@@ -221,23 +231,23 @@ export const BIMBurnCard: React.FC<BIMBurnCardProps> = ({
                     {showPenaltyWarning && (
                       <div className="text-sm text-muted-foreground line-through">
                         {payoutType === 'ton' 
-                          ? `${burnPreview.original_ton_amount.toFixed(6)} TON` 
-                          : `${parseFloat(burnAmount).toFixed(6)} Bimcoin`
+                          ? `${(burnPreview.original_ton_amount || 0).toFixed(6)} TON` 
+                          : `${parseFloat(burnAmount || '0').toFixed(6)} Bimcoin`
                         }
                       </div>
                     )}
                     <div className="font-medium text-primary">
                       {payoutType === 'ton' 
-                        ? `${burnPreview.final_ton_amount.toFixed(6)} TON`
-                        : `${(parseFloat(burnAmount) * (1 - (burnPreview.penalty_amount / parseFloat(burnAmount)))).toFixed(6)} Bimcoin`
+                        ? `${(burnPreview.final_ton_amount || 0).toFixed(6)} TON`
+                        : `${(parseFloat(burnAmount || '0') * Math.max(0, 1 - ((burnPreview.penalty_amount || 0) / parseFloat(burnAmount || '1')))).toFixed(6)} Bimcoin`
                       }
                     </div>
                   </>
                 ) : (
                   <span className="font-medium text-primary">
                     {payoutType === 'ton' 
-                      ? `${(parseFloat(burnAmount) * 0.005).toFixed(6)} TON`
-                      : `${parseFloat(burnAmount).toFixed(6)} Bimcoin`
+                      ? `${(parseFloat(burnAmount || '0') * 0.005).toFixed(6)} TON`
+                      : `${parseFloat(burnAmount || '0').toFixed(6)} Bimcoin`
                     }
                   </span>
                 )}
