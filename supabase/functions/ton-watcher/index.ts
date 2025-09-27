@@ -170,7 +170,7 @@ async function checkDeposits() {
             const comment = tx.in_msg.message
             if (comment.startsWith('BIM:DEPOSIT:')) {
               const txHash = tx.hash
-              const amount = tx.value ? (parseInt(tx.value) / 1000000000).toString() : '0'
+              const amount = tx.in_msg.value ? (parseInt(tx.in_msg.value) / 1000000000).toString() : '0'
               
               console.log(`Found verified deposit transaction: ${comment}`)
               await processDeposit(comment, txHash, amount)
