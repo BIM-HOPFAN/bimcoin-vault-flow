@@ -201,13 +201,10 @@ async function processDeposit(req: Request) {
 
     if (updateError) throw updateError
 
-    // Update user balances and stats
-    const depositAmount = deposit.deposit_type === 'TON' ? parseFloat(deposit.ton_amount) : 0;
+    // Update user last activity (balances are updated by database trigger)
     const { error: userUpdateError } = await supabase
       .from('users')
       .update({
-        bim_balance: (parseFloat(deposit.users.bim_balance) + parseFloat(deposit.bim_amount)).toString(),
-        total_deposited: (parseFloat(deposit.users.total_deposited) + depositAmount).toString(),
         last_activity_at: new Date().toISOString()
       })
       .eq('id', deposit.user_id)
