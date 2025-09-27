@@ -229,97 +229,167 @@ serve(async (req) => {
       }
 
       try {
-        // Initialize TON client with multiple endpoints for reliability
+        console.log(`=== Starting BIM to TON burn process ===`)
+        console.log(`User: ${wallet_address}, Amount: ${burnAmount} BIM, Expected TON: ${actualTonAmount}`)
+
+        // Initialize TON client with better error handling
         let client
         let endpoint
         const tonCenterKey = Deno.env.get('TON_CENTER_API_KEY')
         
+        // Validate environment variables first
+        const adminMnemonic = Deno.env.get('ADMIN_MNEMONIC')
+        if (!adminMnemonic) {
+          console.error('ADMIN_MNEMONIC not configured in environment')
+          throw new Error('Treasury wallet not configured - contact administrator')
+        }
+
+        // Validate mnemonic format
+        const mnemonicWords = adminMnemonic.trim().split(' ')
+        if (mnemonicWords.length !== 24) {
+          console.error(`Invalid mnemonic length: ${mnemonicWords.length} words (expected 24)`)
+          throw new Error('Invalid treasury wallet configuration')
+        }
+
         // Try TON Center first, fallback to TonHub
         try {
+          if (!tonCenterKey) {
+            throw new Error('TON_CENTER_API_KEY not configured')
+          }
           endpoint = 'https://toncenter.com/api/v2/jsonRPC'
           client = new TonClient({
             endpoint: endpoint,
             apiKey: tonCenterKey
           })
+          console.log('Using TON Center API with authenticated access')
         } catch (tonCenterError) {
-          console.log('TON Center failed, trying TonHub:', tonCenterError)
+          console.log('TON Center failed, trying TonHub:', (tonCenterError as Error).message)
           endpoint = 'https://mainnet-v4.tonhubapi.com'
           client = new TonClient({
             endpoint: endpoint
           })
+          console.log('Using TonHub API as fallback')
         }
 
-        console.log(`Using TON endpoint: ${endpoint}`)
-
-        const adminMnemonic = Deno.env.get('ADMIN_MNEMONIC')
-        if (!adminMnemonic) {
-          throw new Error('ADMIN_MNEMONIC not configured')
-        }
-
-        const keyPair = await mnemonicToWalletKey(adminMnemonic.split(' '))
-        const wallet = WalletContractV4.create({ workchain: 0, publicKey: keyPair.publicKey })
-        const contract = client.open(wallet)
-
-        // Check wallet balance first
-        // Send TON to user's wallet (after penalty deduction)
-        let ton_amount = actualTonAmount
-        const recipientAddress = wallet_address
+        // Initialize treasury wallet
+        let keyPair
+        let wallet
+        let contract
         
         try {
-          const balance = await contract.getBalance()
-          const balanceInTon = Number(balance) / 1_000_000_000
-          console.log(`Treasury wallet balance: ${balanceInTon} TON`)
+          keyPair = await mnemonicToWalletKey(mnemonicWords)
+          wallet = WalletContractV4.create({ workchain: 0, publicKey: keyPair.publicKey })
+          contract = client.open(wallet)
           
-          if (balanceInTon < ton_amount + 0.01) { // Need extra for fees
-            throw new Error(`Insufficient treasury balance: ${balanceInTon} TON, required: ${ton_amount + 0.01} TON`)
+          console.log(`Treasury wallet address: ${wallet.address.toString()}`)
+        } catch (walletError) {
+          console.error('Failed to initialize treasury wallet:', walletError)
+          throw new Error('Treasury wallet initialization failed')
+        }
+
+        // Check wallet balance with retry logic
+        let balance
+        let balanceInTon = 0
+        let retries = 3
+        
+        while (retries > 0) {
+          try {
+            balance = await contract.getBalance()
+            balanceInTon = Number(balance) / 1_000_000_000
+            console.log(`Treasury wallet balance: ${balanceInTon} TON`)
+            break
+          } catch (balanceError) {
+            retries--
+            console.log(`Balance check failed, retries left: ${retries}`, (balanceError as Error).message)
+            if (retries === 0) {
+              throw new Error('Unable to verify treasury wallet balance - network issues')
+            }
+            await new Promise(resolve => setTimeout(resolve, 2000))
           }
-        } catch (balanceError) {
-          console.error('Failed to check treasury balance:', balanceError)
-          throw new Error('Unable to verify treasury wallet state')
         }
         
-        console.log(`Preparing to send ${ton_amount} TON (${BigInt(Math.floor(ton_amount * 1_000_000_000))} nanotons) to ${recipientAddress}`)
+        // Validate sufficient balance
+        const requiredAmount = actualTonAmount + 0.05 // More generous fee allowance
+        if (balanceInTon < requiredAmount) {
+          console.error(`Insufficient treasury balance: ${balanceInTon} TON, required: ${requiredAmount} TON`)
+          throw new Error(`Treasury wallet has insufficient balance. Available: ${balanceInTon.toFixed(4)} TON, Required: ${requiredAmount.toFixed(4)} TON`)
+        }
 
-        // Get sequence number and send transaction
-        const seqno = await contract.getSeqno()
-        console.log(`Current treasury seqno: ${seqno}`)
+        // Validate recipient address format
+        const recipientAddress = wallet_address
+        if (!recipientAddress || recipientAddress.length < 48) {
+          console.error(`Invalid recipient address: ${recipientAddress}`)
+          throw new Error('Invalid recipient wallet address')
+        }
         
-        await contract.sendTransfer({
-          secretKey: keyPair.secretKey,
-          seqno: seqno,
-          messages: [
-            internal({
-              to: recipientAddress,
-              value: BigInt(Math.floor(ton_amount * 1_000_000_000)),
-              body: `BIM burn payout: ${burnAmount} BIM → ${ton_amount} TON`,
-              bounce: false,
-            }),
-          ],
-        })
+        console.log(`Preparing to send ${actualTonAmount} TON (${BigInt(Math.floor(actualTonAmount * 1_000_000_000))} nanotons) to ${recipientAddress}`)
 
-        // Wait for transaction confirmation with better error handling
+        // Get sequence number with validation
+        let seqno
+        try {
+          seqno = await contract.getSeqno()
+          console.log(`Current treasury seqno: ${seqno}`)
+          
+          if (seqno === undefined || seqno === null) {
+            throw new Error('Unable to get wallet sequence number')
+          }
+        } catch (seqnoError) {
+          console.error('Failed to get seqno:', seqnoError)
+          throw new Error('Treasury wallet not ready - try again later')
+        }
+        
+        // Send transaction with better error handling
+        let transferResult
+        try {
+          transferResult = await contract.sendTransfer({
+            secretKey: keyPair.secretKey,
+            seqno: seqno,
+            messages: [
+              internal({
+                to: recipientAddress,
+                value: BigInt(Math.floor(actualTonAmount * 1_000_000_000)),
+                body: `BIM burn payout: ${burnAmount} BIM → ${actualTonAmount} TON`,
+                bounce: false,
+              }),
+            ],
+          })
+          console.log('Transfer transaction sent successfully')
+        } catch (transferError) {
+          console.error('Transfer failed:', transferError)
+          throw new Error(`TON transfer failed: ${(transferError as Error).message}`)
+        }
+
+        // Wait for transaction confirmation with extended timeout
         let currentSeqno = seqno
         let attempts = 0
-        const maxAttempts = 30
+        const maxAttempts = 60 // Increased to 2 minutes
+        const checkInterval = 2000 // 2 seconds
 
-        console.log('Waiting for transaction confirmation...')
+        console.log('Waiting for blockchain confirmation...')
         while (currentSeqno === seqno && attempts < maxAttempts) {
-          await new Promise(resolve => setTimeout(resolve, 2000))
+          await new Promise(resolve => setTimeout(resolve, checkInterval))
           try {
             currentSeqno = await contract.getSeqno()
-            console.log(`Seqno check ${attempts + 1}: ${currentSeqno} (expecting > ${seqno})`)
+            console.log(`Confirmation check ${attempts + 1}/${maxAttempts}: seqno ${currentSeqno} (expecting > ${seqno})`)
+            
+            if (currentSeqno > seqno) {
+              console.log(`✅ Transaction confirmed! Seqno changed: ${seqno} → ${currentSeqno}`)
+              break
+            }
           } catch (error) {
-            console.log(`Seqno check attempt ${attempts + 1} failed:`, error)
+            console.log(`Seqno check attempt ${attempts + 1} failed:`, (error as Error).message)
           }
           attempts++
         }
 
+        // Strict confirmation validation
         if (currentSeqno === seqno) {
-          throw new Error('Transaction not confirmed within timeout period - TON transfer may have failed')
+          console.error(`❌ Transaction NOT confirmed after ${attempts} attempts (${(attempts * checkInterval / 1000)}s)`)
+          throw new Error(`Transaction confirmation timeout - TON transfer failed. Your BIM was not deducted.`)
         }
 
-        const ton_payout_hash = `confirmed_${seqno}_${Date.now()}`
-        console.log(`TON transfer confirmed! Seqno: ${seqno} -> ${currentSeqno}`)
+        const ton_payout_hash = `confirmed_${seqno}_to_${currentSeqno}_${Date.now()}`
+        console.log(`✅ TON transfer SUCCESS! Hash: ${ton_payout_hash}`)
 
         // Now update user balances (only after successful TON transfer)
         const { error: updateError } = await supabase
@@ -335,17 +405,19 @@ serve(async (req) => {
           throw new Error('Failed to update user balances')
         }
 
-        // Record the burn transaction
+         // Record the burn transaction
         const { data: burnRecord, error: burnError } = await supabase
           .from('burns')
           .insert({
             user_id: user.id,
             bim_amount: bim_amount,
-            ton_amount: ton_amount,
+            ton_amount: actualTonAmount,
             jetton_burn_hash: `bim_burn_${Date.now()}_${Math.random().toString(36).substring(7)}`,
             ton_payout_hash: ton_payout_hash,
             processed_at: new Date().toISOString(),
-            payout_processed: true
+            payout_processed: true,
+            penalty_amount: penaltyAmount,
+            burn_type: burnType
           })
           .select()
           .single()
