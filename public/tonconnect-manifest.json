@@ -1,7 +1,5 @@
 {
   "url": "https://bimlight.lovable.app",
   "name": "Bimcoin",
-  "iconUrl": "https://bimlight.lovable.app/bim-icon.png",
-  "termsOfUseUrl": "https://bimlight.lovable.app/terms",
-  "privacyPolicyUrl": "https://bimlight.lovable.app/privacy"
+  "iconUrl": "https://bimlight.lovable.app/bim-icon.png"
 }
