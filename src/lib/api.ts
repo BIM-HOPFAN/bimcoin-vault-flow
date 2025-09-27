@@ -9,12 +9,24 @@ export class BimCoinAPI {
 
   // User API
   async registerUser(walletAddress: string, referralCode?: string) {
-    const response = await fetch(`${this.baseUrl}/user-api/register`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ wallet_address: walletAddress, referral_code: referralCode })
-    })
-    return await response.json()
+    try {
+      const response = await fetch(`${this.baseUrl}/user-api/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ wallet_address: walletAddress, referral_code: referralCode })
+      })
+      
+      const data = await response.json()
+      
+      if (!response.ok) {
+        return { error: data.error || `HTTP ${response.status}: Failed to register user` }
+      }
+      
+      return data
+    } catch (error) {
+      console.error('Register user error:', error)
+      return { error: 'Network error: Unable to register user' }
+    }
   }
 
   async getUserProfile(walletAddress: string) {
@@ -43,26 +55,60 @@ export class BimCoinAPI {
 
   // Deposit API
   async createDepositIntent(walletAddress: string, depositAmount: number, depositType: 'TON' | 'Bimcoin' = 'TON') {
-    const response = await fetch(`${this.baseUrl}/deposit-api/create-intent`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        wallet_address: walletAddress, 
-        deposit_amount: depositAmount,
-        deposit_type: depositType
+    try {
+      const response = await fetch(`${this.baseUrl}/deposit-api/create-intent`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          wallet_address: walletAddress, 
+          deposit_amount: depositAmount,
+          deposit_type: depositType
+        })
       })
-    })
-    return await response.json()
+      
+      const data = await response.json()
+      
+      if (!response.ok) {
+        return { error: data.error || `HTTP ${response.status}: ${response.statusText}` }
+      }
+      
+      return data
+    } catch (error) {
+      console.error('Create deposit intent error:', error)
+      return { error: 'Network error: Unable to connect to deposit service' }
+    }
   }
 
   async getDepositHistory(walletAddress: string, limit = 10) {
-    const response = await fetch(`${this.baseUrl}/deposit-api/history?wallet_address=${walletAddress}&limit=${limit}`)
-    return await response.json()
+    try {
+      const response = await fetch(`${this.baseUrl}/deposit-api/history?wallet_address=${walletAddress}&limit=${limit}`)
+      const data = await response.json()
+      
+      if (!response.ok) {
+        return { error: data.error || `HTTP ${response.status}: Failed to fetch deposit history` }
+      }
+      
+      return data
+    } catch (error) {
+      console.error('Get deposit history error:', error)
+      return { error: 'Network error: Unable to fetch deposit history' }
+    }
   }
 
   async getDepositStatus(depositId: string) {
-    const response = await fetch(`${this.baseUrl}/deposit-api/status?deposit_id=${depositId}`)
-    return await response.json()
+    try {
+      const response = await fetch(`${this.baseUrl}/deposit-api/status?deposit_id=${depositId}`)
+      const data = await response.json()
+      
+      if (!response.ok) {
+        return { error: data.error || `HTTP ${response.status}: Failed to fetch deposit status` }
+      }
+      
+      return data
+    } catch (error) {
+      console.error('Get deposit status error:', error)
+      return { error: 'Network error: Unable to fetch deposit status' }
+    }
   }
 
   // Mining API
