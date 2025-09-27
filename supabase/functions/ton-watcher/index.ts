@@ -173,8 +173,10 @@ async function checkDeposits() {
               const amount = tx.in_msg.value ? (parseInt(tx.in_msg.value) / 1000000000).toString() : '0'
               
               console.log(`Found verified deposit transaction: ${comment}`)
-              await processDeposit(comment, txHash, amount)
-              processedCount++
+              const wasProcessed = await processDeposit(comment, txHash, amount)
+              if (wasProcessed) {
+                processedCount++
+              }
             }
           }
         } catch (error) {
@@ -203,7 +205,7 @@ async function checkDeposits() {
   }
 }
 
-async function processDeposit(depositComment: string, txHash: string, amount: string) {
+async function processDeposit(depositComment: string, txHash: string, amount: string): Promise<boolean> {
   try {
     // Find pending deposit with this comment
     const { data: pendingDeposit, error: depositError } = await supabase
@@ -215,7 +217,7 @@ async function processDeposit(depositComment: string, txHash: string, amount: st
 
     if (depositError || !pendingDeposit) {
       console.log(`No pending deposit found for comment: ${depositComment}`)
-      return
+      return false
     }
 
     console.log(`Processing ${pendingDeposit.deposit_type} deposit: ${depositComment}`)
@@ -229,7 +231,7 @@ async function processDeposit(depositComment: string, txHash: string, amount: st
 
       if (Math.abs(expectedAmount - actualAmount) > tolerance) {
         console.log(`TON amount mismatch: expected ${expectedAmount}, got ${actualAmount}`)
-        return
+        return false
       }
     } else if (pendingDeposit.deposit_type === 'Bimcoin') {
       // For Bimcoin deposits, we need to verify jetton transfers
@@ -249,7 +251,7 @@ async function processDeposit(depositComment: string, txHash: string, amount: st
 
     if (updateError) {
       console.error(`Failed to update deposit: ${updateError.message}`)
-      return
+      return false
     }
 
     // Update user's total deposited and last activity (balances updated by trigger)
@@ -264,7 +266,7 @@ async function processDeposit(depositComment: string, txHash: string, amount: st
 
     if (userUpdateError) {
       console.error(`Failed to update user stats: ${userUpdateError.message}`)
-      return
+      return false
     }
 
     // Handle referral rewards if applicable
@@ -273,9 +275,11 @@ async function processDeposit(depositComment: string, txHash: string, amount: st
     }
 
     console.log(`Successfully processed ${pendingDeposit.deposit_type} deposit: ${depositComment} for ${pendingDeposit.bim_amount} BIM`)
+    return true
     
   } catch (error) {
     console.error(`Error processing deposit ${depositComment}:`, error)
+    return false
   }
 }
 

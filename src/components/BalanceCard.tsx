@@ -172,12 +172,8 @@ const BalanceCard = ({ onBalancesUpdate }: BalanceCardProps) => {
           });
           // Refresh balances after processing deposits
           setTimeout(() => fetchBalances(), 1000);
-        } else {
-          toast({
-            title: "No New Deposits",
-            description: result.error || "No pending deposits found to process.",
-          });
         }
+        // Don't show "No New Deposits" message for automatic checks
       } else {
         toast({
           title: "Processing Failed",
