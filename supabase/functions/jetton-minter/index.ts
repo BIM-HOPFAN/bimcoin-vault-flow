@@ -158,7 +158,7 @@ async function mintTokens(req: Request) {
     }
 
     // Use environment variable first (real minter address), fallback to config
-    const minterAddress = MINTER_ADDRESS
+    let minterAddress = MINTER_ADDRESS
     
     if (!minterAddress) {
       const { data: minterConfig } = await supabase
@@ -167,14 +167,10 @@ async function mintTokens(req: Request) {
         .eq('key', 'jetton_minter_address')
         .single()
       
-      const configAddress = minterConfig?.value
-      if (!configAddress) {
+      minterAddress = minterConfig?.value
+      if (!minterAddress) {
         throw new Error('Jetton minter address not configured')
       }
-    }
-
-    if (!minterAddress) {
-      throw new Error('Jetton minter address not configured')
     }
 
     // Import TON SDK
