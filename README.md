@@ -211,6 +211,7 @@ Create appropriate environment files for:
 - Fixed overly permissive mining_sessions policies that allowed unauthorized data access
 - Implemented user-specific data isolation across all tables
 - Added comprehensive input validation for all API endpoints
+- **Fixed critical referral system vulnerability**: Replaced unrestricted access policy with secure RLS policies that only allow users to view referrals where they are the referrer/referee, and restrict all data modifications to backend functions only
 - Enhanced referral system to prevent reward manipulation
 
 ## Contributing
