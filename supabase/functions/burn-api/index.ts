@@ -168,8 +168,24 @@ serve(async (req) => {
       }
 
       const burnAmount = parseFloat(bim_amount)
-      // Exchange rate: 200 BIM = 1 TON
-      const tonAmount = burnAmount * 0.005
+      
+      // Get burn rate from config
+      const { data: burnRateConfig, error: configError } = await supabase
+        .from('config')
+        .select('value')
+        .eq('key', 'burn_rate_bim_per_ton')
+        .single()
+
+      if (configError) {
+        console.error('Failed to get burn rate config:', configError)
+        return new Response(
+          JSON.stringify({ success: false, error: 'Failed to get exchange rate configuration' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      const burnRateBimPerTon = parseFloat(burnRateConfig.value) // e.g., 200
+      const tonAmount = burnAmount / burnRateBimPerTon // e.g., burnAmount / 200
 
       // Get user
       const { data: user, error: userError } = await supabase
@@ -650,13 +666,29 @@ serve(async (req) => {
         )
       }
 
+      // Get burn rate from config
+      const { data: burnRateConfig, error: configError } = await supabase
+        .from('config')
+        .select('value')
+        .eq('key', 'burn_rate_bim_per_ton')
+        .single()
+
+      if (configError) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Failed to get exchange rate configuration' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      const burnRateBimPerTon = parseFloat(burnRateConfig.value) // e.g., 200
+
       // Calculate preview with penalty logic
       const depositBimBalance = parseFloat(user.deposit_bim_balance || '0')
       const earnedBimBalance = parseFloat(user.earned_bim_balance || '0')
       
       let burnType = 'earned_bim'
       let penaltyAmount = 0
-      let tonAmount = burnAmount * 0.005 // 200 BIM = 1 TON
+      let tonAmount = burnAmount / burnRateBimPerTon // e.g., burnAmount / 200
       let jettonAmount = burnAmount // 1:1 ratio for jettons
       let finalTonAmount = tonAmount
       let finalJettonAmount = jettonAmount
@@ -744,13 +776,29 @@ serve(async (req) => {
         )
       }
 
+      // Get burn rate from config
+      const { data: burnRateConfig, error: configError } = await supabase
+        .from('config')
+        .select('value')
+        .eq('key', 'burn_rate_bim_per_ton')
+        .single()
+
+      if (configError) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Failed to get exchange rate configuration' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      const burnRateBimPerTon = parseFloat(burnRateConfig.value) // e.g., 200
+
       // Determine burn type and calculate penalty
       const depositBimBalance = parseFloat(user.deposit_bim_balance || '0')
       const earnedBimBalance = parseFloat(user.earned_bim_balance || '0')
       
       let burnType = 'earned_bim'
       let penaltyAmount = 0
-      let tonAmount = burnAmount * 0.005 // 200 BIM = 1 TON
+      let tonAmount = burnAmount / burnRateBimPerTon // e.g., burnAmount / 200
       let finalTonAmount = tonAmount
 
       // If burning more than earned BIM, we're burning from deposits (penalty applies)
