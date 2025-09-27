@@ -6,7 +6,7 @@ interface TonConnectProviderProps {
 }
 
 const TonConnectProvider = ({ children }: TonConnectProviderProps) => {
-  const manifestUrl = 'https://bimlight.lovable.app/tonconnect-manifest.json';
+  const manifestUrl = `${window.location.origin}/tonconnect-manifest.json`;
   
   console.log('TonConnect manifest URL:', manifestUrl);
   
