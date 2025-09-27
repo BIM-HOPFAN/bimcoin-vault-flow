@@ -9,7 +9,7 @@ BimCoin is a DeFi protocol that allows users to deposit TON tokens to mint BIM t
 ## Key Features
 
 ### 💰 Token System
-- **BIM Token**: Primary ecosystem token (1 TON = 1,000 BIM)
+- **BIM Token**: Primary ecosystem token (1 TON = 200 BIM)
 - **OBA Token**: Reward token earned through platform activities
 - **Token Burning**: Convert BIM/OBA back to TON
 
@@ -118,7 +118,7 @@ supabase/
 ## Token Economics
 
 ### BIM Token (Primary)
-- **Minting Rate**: 1 TON = 1,000 BIM
+- **Minting Rate**: 1 TON = 200 BIM
 - **Purpose**: Ecosystem participation and rewards
 - **Burning**: Convert back to TON (configurable exchange rate)
 
