@@ -8,9 +8,17 @@ import dotenv from 'dotenv';
 
 import { logger } from './utils/logger';
 import { errorHandler } from './middleware/error-handler';
+import { 
+  corsOptions, 
+  helmetConfig, 
+  requestLogger, 
+  errorBoundary 
+} from './middleware/security';
+import { monitoringService } from './services/monitoring';
 import { webhookRoutes } from './routes/webhook';
 import { apiRoutes } from './routes/api';
 import { healthRoutes } from './routes/health';
+import adminRoutes from './routes/admin';
 import { initializeDatabase } from './database/connection';
 import { initializeRedis } from './services/redis';
 import { startWorkers } from './workers';
@@ -21,11 +29,8 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Security middleware
-app.use(helmet());
-app.use(cors({
-  origin: process.env.ALLOWED_ORIGINS?.split(',') || '*',
-  credentials: true
-}));
+app.use(helmetConfig);
+app.use(cors(corsOptions));
 
 // Rate limiting
 const limiter = rateLimit({
@@ -37,21 +42,26 @@ app.use('/api/', limiter);
 
 // Body parsing
 app.use(compression());
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// Logging
-app.use(morgan('combined', {
-  stream: { write: (message) => logger.info(message.trim()) }
-}));
+// Request logging
+app.use(requestLogger);
 
 // Routes
 app.use('/health', healthRoutes);
 app.use('/webhook', webhookRoutes);
 app.use('/api', apiRoutes);
+app.use('/admin', adminRoutes);
+
+// Metrics endpoint
+app.get('/metrics', (req, res) => {
+  monitoringService.getMetrics(req, res);
+});
 
 // Error handling
 app.use(errorHandler);
+app.use(errorBoundary);
 
 // 404 handler
 app.use('*', (req, res) => {

@@ -1,0 +1,155 @@
+version: '3.8'
+
+services:
+  blockchain-service:
+    build: 
+      context: ..
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+      - "9090:9090" # Metrics port
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - TON_CENTER_API_KEY=${TON_CENTER_API_KEY}
+      - TON_API_KEY=${TON_API_KEY}
+      - TREASURY_TON_ADDRESS=${TREASURY_TON_ADDRESS}
+      - TREASURY_JETTON_MASTER=${TREASURY_JETTON_MASTER}
+      - WEBHOOK_SECRET=${WEBHOOK_SECRET}
+      - JWT_SECRET=${JWT_SECRET}
+      - KMS_PROVIDER=${KMS_PROVIDER}
+      - AWS_REGION=${AWS_REGION}
+      - AWS_KMS_KEY_ID=${AWS_KMS_KEY_ID}
+      - SENTRY_DSN=${SENTRY_DSN}
+    depends_on:
+      - postgres
+      - redis
+    restart: unless-stopped
+    volumes:
+      - ../logs:/app/logs
+    networks:
+      - blockchain-network
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  # Separate worker processes
+  blockchain-worker:
+    build: 
+      context: ..
+      dockerfile: Dockerfile
+    command: ["node", "dist/workers/index.js"]
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - TON_CENTER_API_KEY=${TON_CENTER_API_KEY}
+      - TON_API_KEY=${TON_API_KEY}
+      - TREASURY_TON_ADDRESS=${TREASURY_TON_ADDRESS}
+      - TREASURY_JETTON_MASTER=${TREASURY_JETTON_MASTER}
+      - KMS_PROVIDER=${KMS_PROVIDER}
+      - AWS_REGION=${AWS_REGION}
+      - AWS_KMS_KEY_ID=${AWS_KMS_KEY_ID}
+    depends_on:
+      - postgres
+      - redis
+    restart: unless-stopped
+    volumes:
+      - ../logs:/app/logs
+    networks:
+      - blockchain-network
+    deploy:
+      replicas: 3
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ../blockchain-service/src/database/schema.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - blockchain-network
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes --appendfsync everysec
+    volumes:
+      - redis_data:/data
+    networks:
+      - blockchain-network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  # Load balancer
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf
+      - ./ssl:/etc/nginx/ssl
+    depends_on:
+      - blockchain-service
+    networks:
+      - blockchain-network
+    restart: unless-stopped
+
+  # Monitoring
+  prometheus:
+    image: prom/prometheus
+    ports:
+      - "9091:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    networks:
+      - blockchain-network
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
+    volumes:
+      - grafana_data:/var/lib/grafana
+    networks:
+      - blockchain-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  blockchain-network:
+    driver: bridge
