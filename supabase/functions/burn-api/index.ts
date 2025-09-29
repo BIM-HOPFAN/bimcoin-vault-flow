@@ -8,6 +8,60 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// Rate limiting and monitoring
+const rateLimitStore = new Map<string, { count: number; resetTime: number }>()
+
+function log(level: 'info' | 'warn' | 'error', message: string, data?: any) {
+  const timestamp = new Date().toISOString()
+  console.log(JSON.stringify({ timestamp, level, message, ...(data && { data }) }))
+}
+
+function checkRateLimit(ip: string, limit: number = 30): boolean {
+  const now = Date.now()
+  const windowMs = 60000 // 1 minute
+  const key = `${ip}_${Math.floor(now / windowMs)}`
+  
+  if (!rateLimitStore.has(key)) {
+    rateLimitStore.set(key, { count: 1, resetTime: now + windowMs })
+    return true
+  }
+  
+  const record = rateLimitStore.get(key)!
+  if (record.count >= limit) return false
+  
+  record.count++
+  return true
+}
+
+// Validation functions
+function validateBurnOBARequest(data: any): { valid: boolean; errors: string[] } {
+  const errors: string[] = []
+  
+  if (!data.wallet_address || !/^[0-9A-Za-z_-]{48}$|^EQ[0-9A-Za-z_-]{46}$/.test(data.wallet_address)) {
+    errors.push('Invalid wallet address format')
+  }
+  
+  if (!data.oba_amount || parseFloat(data.oba_amount) <= 0 || parseFloat(data.oba_amount) > 1000000) {
+    errors.push('OBA amount must be between 0 and 1,000,000')
+  }
+  
+  return { valid: errors.length === 0, errors }
+}
+
+function validateBurnBIMRequest(data: any): { valid: boolean; errors: string[] } {
+  const errors: string[] = []
+  
+  if (!data.wallet_address || !/^[0-9A-Za-z_-]{48}$|^EQ[0-9A-Za-z_-]{46}$/.test(data.wallet_address)) {
+    errors.push('Invalid wallet address format')
+  }
+  
+  if (!data.bim_amount || parseFloat(data.bim_amount) <= 0 || parseFloat(data.bim_amount) > 100000) {
+    errors.push('BIM amount must be between 0 and 100,000')
+  }
+  
+  return { valid: errors.length === 0, errors }
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
