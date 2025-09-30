@@ -142,7 +142,7 @@ const DepositCard = () => {
             messages: [
               {
                 address: userJettonWallet, // Send to user's jetton wallet
-                amount: "100000000", // 0.1 TON for jetton transfer fees
+                amount: "300000000", // 0.3 TON for jetton transfer fees (increased from 0.1)
                 payload: createJettonTransferPayload(
                   jettonAmount,
                   treasuryJettonWallet, // Send to treasury's jetton wallet
