@@ -21,7 +21,6 @@ export const BIMBurnCard: React.FC<BIMBurnCardProps> = ({
   const [burnAmount, setBurnAmount] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [burnPreview, setBurnPreview] = useState<any>(null);
-  const [showPenaltyWarning, setShowPenaltyWarning] = useState(false);
   const [payoutType, setPayoutType] = useState<'ton' | 'jetton'>('ton');
   const address = useTonAddress();
   const { toast } = useToast();
@@ -98,33 +97,20 @@ export const BIMBurnCard: React.FC<BIMBurnCardProps> = ({
   const getBurnPreview = async (amount: string) => {
     if (!address || !amount || parseFloat(amount) <= 0) {
       setBurnPreview(null);
-      setShowPenaltyWarning(false);
       return;
     }
 
     try {
       const preview = await bimCoinAPI.getBurnPreview(address, parseFloat(amount));
       if (preview.success && preview.preview) {
-        // Ensure all required properties exist with fallback values
-        const safePreview = {
-          deposit_bim_balance: preview.preview.deposit_bim_balance || 0,
-          earned_bim_balance: preview.preview.earned_bim_balance || 0,
-          penalty_amount: preview.preview.penalty_amount || 0,
-          final_ton_amount: preview.preview.final_ton_amount || 0,
-          original_ton_amount: preview.preview.original_ton_amount || 0,
-          ...preview.preview
-        };
-        setBurnPreview(safePreview);
-        setShowPenaltyWarning((safePreview.penalty_amount || 0) > 0);
+        setBurnPreview(preview.preview);
       } else {
         console.warn('Invalid preview response:', preview);
         setBurnPreview(null);
-        setShowPenaltyWarning(false);
       }
     } catch (error) {
       console.error('Failed to get burn preview:', error);
       setBurnPreview(null);
-      setShowPenaltyWarning(false);
     }
   };
 
@@ -207,19 +193,6 @@ export const BIMBurnCard: React.FC<BIMBurnCardProps> = ({
           </span>
         </div>
         
-        {showPenaltyWarning && burnPreview && (
-          <div className="space-y-2 p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
-            <div className="flex items-center gap-2 text-destructive">
-              <span className="text-sm font-medium">⚠️ Early Burn Penalty</span>
-            </div>
-            <div className="text-xs text-muted-foreground space-y-1">
-              <div>Deposit BIM Balance: {(burnPreview.deposit_bim_balance || 0).toFixed(4)} BIM</div>
-              <div>Earned BIM Balance: {(burnPreview.earned_bim_balance || 0).toFixed(4)} BIM</div>
-              <div>Penalty Amount: {(burnPreview.penalty_amount || 0).toFixed(4)} BIM (50%)</div>
-            </div>
-          </div>
-        )}
-
         {burnAmount && (
           <div className="flex items-center justify-between p-3 bg-primary/5 rounded-lg border border-primary/20">
             <div className="flex items-center gap-2">
@@ -227,22 +200,12 @@ export const BIMBurnCard: React.FC<BIMBurnCardProps> = ({
               <ArrowRight className="w-4 h-4 text-muted-foreground" />
               <div className="text-right">
                 {burnPreview ? (
-                  <>
-                    {showPenaltyWarning && (
-                      <div className="text-sm text-muted-foreground line-through">
-                        {payoutType === 'ton' 
-                          ? `${(burnPreview.original_ton_amount || 0).toFixed(6)} TON` 
-                          : `${parseFloat(burnAmount || '0').toFixed(6)} Bimcoin`
-                        }
-                      </div>
-                    )}
-                    <div className="font-medium text-primary">
-                      {payoutType === 'ton' 
-                        ? `${(burnPreview.final_ton_amount || 0).toFixed(6)} TON`
-                        : `${(parseFloat(burnAmount || '0') * Math.max(0, 1 - ((burnPreview.penalty_amount || 0) / parseFloat(burnAmount || '1')))).toFixed(6)} Bimcoin`
-                      }
-                    </div>
-                  </>
+                  <div className="font-medium text-primary">
+                    {payoutType === 'ton' 
+                      ? `${(burnPreview.final_ton_amount || 0).toFixed(6)} TON`
+                      : `${parseFloat(burnAmount || '0').toFixed(6)} Bimcoin`
+                    }
+                  </div>
                 ) : (
                   <span className="font-medium text-primary">
                     {payoutType === 'ton' 

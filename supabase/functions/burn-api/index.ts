@@ -267,7 +267,7 @@ serve(async (req) => {
         )
       }
 
-      // Determine burn type and calculate penalty
+      // Determine burn type (no penalty applied)
       const depositBimBalance = parseFloat(user.deposit_bim_balance || '0')
       const earnedBimBalance = parseFloat(user.earned_bim_balance || '0')
       
@@ -276,7 +276,7 @@ serve(async (req) => {
       let finalBurnAmount = burnAmount
       let actualTonAmount = tonAmount
 
-      // If burning more than earned BIM, we're burning from deposits (penalty applies)
+      // If burning more than earned BIM, we're burning from deposits (no penalty)
       if (burnAmount > earnedBimBalance) {
         const depositBurnAmount = burnAmount - earnedBimBalance
         
@@ -290,12 +290,10 @@ serve(async (req) => {
           )
         }
 
-        // Apply 50% penalty to deposit BIM being burned
-        penaltyAmount = depositBurnAmount * 0.5
-        actualTonAmount = tonAmount * (1 - (penaltyAmount / burnAmount))
+        // No penalty applied
         burnType = 'deposit_bim'
         
-        console.log(`Burning deposit BIM with penalty: ${depositBurnAmount} BIM, penalty: ${penaltyAmount}, final TON: ${actualTonAmount}`)
+        console.log(`Burning deposit BIM without penalty: ${depositBurnAmount} BIM, final TON: ${actualTonAmount}`)
       }
 
         try {
@@ -430,7 +428,7 @@ serve(async (req) => {
         )
       }
 
-      // Determine burn type and calculate penalty
+      // Determine burn type (no penalty applied)
       const depositBimBalance = parseFloat(user.deposit_bim_balance || '0')
       const earnedBimBalance = parseFloat(user.earned_bim_balance || '0')
       
@@ -439,7 +437,7 @@ serve(async (req) => {
       let finalBurnAmount = burnAmount
       let jettonAmount = burnAmount // 1:1 ratio for jettons
 
-      // If burning more than earned BIM, we're burning from deposits (penalty applies)
+      // If burning more than earned BIM, we're burning from deposits (no penalty)
       if (burnAmount > earnedBimBalance) {
         const depositBurnAmount = burnAmount - earnedBimBalance
         
@@ -453,12 +451,10 @@ serve(async (req) => {
           )
         }
 
-        // Apply 50% penalty to deposit BIM being burned
-        penaltyAmount = depositBurnAmount * 0.5
-        jettonAmount = burnAmount * (1 - (penaltyAmount / burnAmount))
+        // No penalty applied
         burnType = 'deposit_bim'
         
-        console.log(`Burning deposit BIM with penalty: ${depositBurnAmount} BIM, penalty: ${penaltyAmount}, final jettons: ${jettonAmount}`)
+        console.log(`Burning deposit BIM without penalty: ${depositBurnAmount} BIM, final jettons: ${jettonAmount}`)
       }
 
       try {
@@ -582,7 +578,7 @@ serve(async (req) => {
 
       const burnRateBimPerTon = parseFloat(burnRateConfig.value) // e.g., 200
 
-      // Calculate preview with penalty logic
+      // Calculate preview (no penalty applied)
       const depositBimBalance = parseFloat(user.deposit_bim_balance || '0')
       const earnedBimBalance = parseFloat(user.earned_bim_balance || '0')
       
@@ -593,7 +589,7 @@ serve(async (req) => {
       let finalTonAmount = tonAmount
       let finalJettonAmount = jettonAmount
 
-      // If burning more than earned BIM, calculate penalty
+      // If burning more than earned BIM, no penalty
       if (burnAmount > earnedBimBalance) {
         const depositBurnAmount = burnAmount - earnedBimBalance
         
@@ -607,10 +603,7 @@ serve(async (req) => {
           )
         }
 
-        // Apply 50% penalty to deposit BIM being burned
-        penaltyAmount = depositBurnAmount * 0.5
-        finalTonAmount = tonAmount * (1 - (penaltyAmount / burnAmount))
-        finalJettonAmount = burnAmount * (1 - (penaltyAmount / burnAmount))
+        // No penalty applied
         burnType = 'deposit_bim'
       }
 
@@ -692,7 +685,7 @@ serve(async (req) => {
 
       const burnRateBimPerTon = parseFloat(burnRateConfig.value) // e.g., 200
 
-      // Determine burn type and calculate penalty
+      // Determine burn type (no penalty applied)
       const depositBimBalance = parseFloat(user.deposit_bim_balance || '0')
       const earnedBimBalance = parseFloat(user.earned_bim_balance || '0')
       
@@ -701,7 +694,7 @@ serve(async (req) => {
       let tonAmount = burnAmount / burnRateBimPerTon // e.g., burnAmount / 200
       let finalTonAmount = tonAmount
 
-      // If burning more than earned BIM, we're burning from deposits (penalty applies)
+      // If burning more than earned BIM, we're burning from deposits (no penalty)
       if (burnAmount > earnedBimBalance) {
         const depositBurnAmount = burnAmount - earnedBimBalance
         
@@ -715,12 +708,10 @@ serve(async (req) => {
           )
         }
 
-        // Apply 50% penalty to deposit BIM being burned
-        penaltyAmount = depositBurnAmount * 0.5
-        finalTonAmount = tonAmount * (1 - (penaltyAmount / burnAmount))
+        // No penalty applied
         burnType = 'deposit_bim'
         
-        console.log(`Burning deposit BIM with penalty: ${depositBurnAmount} BIM, penalty: ${penaltyAmount}, final TON: ${finalTonAmount}`)
+        console.log(`Burning deposit BIM without penalty: ${depositBurnAmount} BIM, final TON: ${finalTonAmount}`)
       }
 
       try {
