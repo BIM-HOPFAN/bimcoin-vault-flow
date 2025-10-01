@@ -300,26 +300,65 @@ serve(async (req) => {
         console.log(`=== Starting BIM to TON burn process ===`)
         console.log(`User: ${wallet_address}, Amount: ${burnAmount} BIM, Expected TON: ${actualTonAmount}`)
 
-        // Simplified approach - create a placeholder hash and mark as pending
-        // This avoids the complex blockchain interaction that's causing failures
-        const ton_payout_hash = `pending_${Date.now()}_${Math.random().toString(36).substring(7)}`
-        console.log(`Creating pending TON payout: ${ton_payout_hash}`)
+        // Initialize TON client and treasury wallet
+        const tonClient = new TonClient({
+          endpoint: 'https://toncenter.com/api/v2/jsonRPC',
+          apiKey: Deno.env.get('TON_CENTER_API_KEY') || ''
+        })
 
-        // Update user balances immediately 
-        const { error: updateError } = await supabase
-          .from('users')
-          .update({
-            bim_balance: user.bim_balance - burnAmount,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', user.id)
-
-        if (updateError) {
-          console.error('User update error:', updateError)
-          throw new Error('Failed to update user balances')
+        const adminMnemonic = Deno.env.get('ADMIN_MNEMONIC')
+        if (!adminMnemonic) {
+          throw new Error('Treasury wallet not configured')
         }
 
-         // Record the burn transaction
+        const keyPair = await mnemonicToWalletKey(adminMnemonic.split(' '))
+        const treasuryWallet = WalletContractV4.create({ 
+          workchain: 0, 
+          publicKey: keyPair.publicKey 
+        })
+        const treasuryContract = tonClient.open(treasuryWallet)
+
+        // Check treasury balance
+        const treasuryBalance = await treasuryContract.getBalance()
+        const requiredNano = BigInt(Math.floor(actualTonAmount * 1e9))
+        
+        if (treasuryBalance < requiredNano + BigInt(1e8)) { // Add 0.1 TON for fees
+          throw new Error('Insufficient treasury balance')
+        }
+
+        // Send TON to user
+        console.log(`Sending ${actualTonAmount} TON to ${wallet_address}`)
+        const seqno = await treasuryContract.getSeqno()
+        
+        await treasuryContract.sendTransfer({
+          seqno,
+          secretKey: keyPair.secretKey,
+          messages: [
+            internal({
+              value: requiredNano.toString(),
+              to: wallet_address,
+              body: `BIM burn payout: ${burnAmount} BIM`
+            })
+          ]
+        })
+
+        // Wait for transaction confirmation
+        let currentSeqno = seqno
+        let attempts = 0
+        while (currentSeqno === seqno && attempts < 30) {
+          await new Promise(resolve => setTimeout(resolve, 2000))
+          currentSeqno = await treasuryContract.getSeqno()
+          attempts++
+        }
+
+        if (currentSeqno === seqno) {
+          throw new Error('Transaction not confirmed after 60 seconds')
+        }
+
+        const ton_payout_hash = `${seqno}_confirmed`
+        console.log(`TON payout successful: ${ton_payout_hash}`)
+
+        // Record the burn transaction - trigger will handle balance updates
         const { data: burnRecord, error: burnError } = await supabase
           .from('burns')
           .insert({
