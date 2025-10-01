@@ -321,9 +321,15 @@ serve(async (req) => {
         // Check treasury balance
         const treasuryBalance = await treasuryContract.getBalance()
         const requiredNano = BigInt(Math.floor(actualTonAmount * 1e9))
+        const treasuryBalanceTon = Number(treasuryBalance) / 1e9
+        const requiredTon = Number(requiredNano) / 1e9
+        
+        console.log(`Treasury wallet address: ${treasuryWallet.address.toString()}`)
+        console.log(`Treasury balance: ${treasuryBalanceTon} TON`)
+        console.log(`Required amount: ${requiredTon} TON (+ 0.1 TON for fees)`)
         
         if (treasuryBalance < requiredNano + BigInt(1e8)) { // Add 0.1 TON for fees
-          throw new Error('Insufficient treasury balance')
+          throw new Error(`Insufficient treasury balance. Has ${treasuryBalanceTon} TON, needs ${requiredTon + 0.1} TON`)
         }
 
         // Send TON to user
