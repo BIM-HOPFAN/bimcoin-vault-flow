@@ -577,6 +577,7 @@ serve(async (req) => {
       }
 
       const burnRateBimPerTon = parseFloat(burnRateConfig.value) // e.g., 200
+      console.log(`Burn rate config: ${burnRateBimPerTon}`)
 
       // Calculate preview (no penalty applied)
       const depositBimBalance = parseFloat(user.deposit_bim_balance || '0')
@@ -588,6 +589,8 @@ serve(async (req) => {
       let jettonAmount = burnAmount // 1:1 ratio for jettons
       let finalTonAmount = tonAmount
       let finalJettonAmount = jettonAmount
+      
+      console.log(`Preview calculation: ${burnAmount} BIM / ${burnRateBimPerTon} = ${tonAmount} TON`)
 
       // If burning more than earned BIM, no penalty
       if (burnAmount > earnedBimBalance) {
