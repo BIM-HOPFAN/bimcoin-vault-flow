@@ -202,8 +202,8 @@ export const BIMBurnCard: React.FC<BIMBurnCardProps> = ({
                 {burnPreview ? (
                   <div className="font-medium text-primary">
                     {payoutType === 'ton' 
-                      ? `${(burnPreview.final_ton_amount || 0).toFixed(6)} TON`
-                      : `${parseFloat(burnAmount || '0').toFixed(6)} Bimcoin`
+                      ? `${(burnPreview.ton_amount || 0).toFixed(6)} TON`
+                      : `${(burnPreview.jetton_amount || parseFloat(burnAmount || '0')).toFixed(6)} Bimcoin`
                     }
                   </div>
                 ) : (
