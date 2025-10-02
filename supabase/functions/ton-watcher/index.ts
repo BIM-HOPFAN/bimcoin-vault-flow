@@ -84,10 +84,30 @@ async function checkDeposits() {
 
   console.log(`Using treasury address: ${TREASURY_ADDRESS}`)
 
-  // Remove automatic processing of pending deposits without transaction verification
-  // Only process deposits that have actual blockchain transaction evidence
+  // First, derive treasury's jetton wallet address
+  let treasuryJettonWallet = null
+  if (MINTER_ADDRESS) {
+    try {
+      const jettonWalletResponse = await fetch(
+        `https://tonapi.io/v2/accounts/${TREASURY_ADDRESS}/jettons/${MINTER_ADDRESS}`,
+        { headers: { 'Content-Type': 'application/json' } }
+      )
+      
+      if (jettonWalletResponse.ok) {
+        const jettonData = await jettonWalletResponse.json()
+        treasuryJettonWallet = jettonData.wallet_address?.address
+        console.log(`Treasury jetton wallet: ${treasuryJettonWallet}`)
+      }
+    } catch (error) {
+      console.error('Failed to derive treasury jetton wallet:', error)
+    }
+  }
 
   try {
+    let tonProcessedCount = 0
+    let jettonProcessedCount = 0
+    
+    // 1. Check TON deposits to main treasury wallet
     let data = null
     let apiUsed = 'toncenter'
     
@@ -158,12 +178,10 @@ async function checkDeposits() {
     }
     
     // Only process deposits with verified blockchain transactions
-    console.log('Checking blockchain transactions for deposit verification...')
-    
-    let processedCount = 0
+    console.log('Checking TON transactions for deposit verification...')
     
     if (data && data.result && Array.isArray(data.result)) {
-      // Process verified transactions only
+      // Process verified TON transactions
       for (const tx of data.result) {
         try {
           if (tx.in_msg && tx.in_msg.message) {
@@ -172,25 +190,74 @@ async function checkDeposits() {
               const txHash = tx.hash
               const amount = tx.in_msg.value ? (parseInt(tx.in_msg.value) / 1000000000).toString() : '0'
               
-              console.log(`Found verified deposit transaction: ${comment}`)
-              const wasProcessed = await processDeposit(comment, txHash, amount)
+              console.log(`Found verified TON deposit: ${comment}`)
+              const wasProcessed = await processDeposit(comment, txHash, amount, 'TON')
               if (wasProcessed) {
-                processedCount++
+                tonProcessedCount++
               }
             }
           }
         } catch (error) {
-          console.error(`Error processing transaction:`, error)
+          console.error(`Error processing TON transaction:`, error)
         }
       }
     }
     
-    console.log(`Processed ${processedCount} verified deposits`)
+    // 2. Check Bimcoin deposits to treasury's jetton wallet
+    if (treasuryJettonWallet) {
+      console.log('Checking Bimcoin jetton transfers...')
+      
+      try {
+        const jettonTxResponse = await fetch(
+          `https://tonapi.io/v2/accounts/${treasuryJettonWallet}/events?limit=20`,
+          { headers: { 'Content-Type': 'application/json' } }
+        )
+        
+        if (jettonTxResponse.ok) {
+          const jettonEvents = await jettonTxResponse.json()
+          console.log(`Found ${jettonEvents.events?.length || 0} jetton events`)
+          
+          for (const event of jettonEvents.events || []) {
+            try {
+              // Look for jetton transfer actions
+              for (const action of event.actions || []) {
+                if (action.type === 'JettonTransfer' && action.JettonTransfer) {
+                  const transfer = action.JettonTransfer
+                  const comment = transfer.comment || ''
+                  
+                  if (comment.startsWith('BIM:DEPOSIT:')) {
+                    const txHash = event.event_id
+                    const amount = transfer.amount ? (parseInt(transfer.amount) / 1000000000).toString() : '0'
+                    
+                    console.log(`Found verified Bimcoin deposit: ${comment}, amount: ${amount}`)
+                    const wasProcessed = await processDeposit(comment, txHash, amount, 'Bimcoin')
+                    if (wasProcessed) {
+                      jettonProcessedCount++
+                    }
+                  }
+                }
+              }
+            } catch (error) {
+              console.error(`Error processing jetton event:`, error)
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching jetton transfers:', error)
+      }
+    }
+    
+    const totalProcessed = tonProcessedCount + jettonProcessedCount
+    console.log(`Processed ${tonProcessedCount} TON deposits and ${jettonProcessedCount} Bimcoin deposits`)
+    
     return new Response(JSON.stringify({
       success: true,
-      processed_deposits: processedCount,
+      processed_deposits: totalProcessed,
+      ton_deposits: tonProcessedCount,
+      jetton_deposits: jettonProcessedCount,
       checked_transactions: data?.result?.length || 0,
-      api_used: apiUsed
+      api_used: apiUsed,
+      treasury_jetton_wallet: treasuryJettonWallet
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
@@ -205,7 +272,7 @@ async function checkDeposits() {
   }
 }
 
-async function processDeposit(depositComment: string, txHash: string, amount: string): Promise<boolean> {
+async function processDeposit(depositComment: string, txHash: string, amount: string, depositType: string): Promise<boolean> {
   try {
     // Find pending deposit with this comment
     const { data: pendingDeposit, error: depositError } = await supabase
@@ -223,7 +290,7 @@ async function processDeposit(depositComment: string, txHash: string, amount: st
     console.log(`Processing ${pendingDeposit.deposit_type} deposit: ${depositComment}`)
 
     // Handle different deposit types
-    if (pendingDeposit.deposit_type === 'TON') {
+    if (depositType === 'TON' && pendingDeposit.deposit_type === 'TON') {
       // Verify TON amount matches (with some tolerance)
       const expectedAmount = parseFloat(pendingDeposit.ton_amount)
       const actualAmount = parseFloat(amount)
@@ -233,10 +300,21 @@ async function processDeposit(depositComment: string, txHash: string, amount: st
         console.log(`TON amount mismatch: expected ${expectedAmount}, got ${actualAmount}`)
         return false
       }
-    } else if (pendingDeposit.deposit_type === 'Bimcoin') {
-      // For Bimcoin deposits, we need to verify jetton transfers
-      // The amount verification is different for jetton transfers
-      console.log(`Processing Bimcoin deposit: ${pendingDeposit.bim_amount} BIM from ${pendingDeposit.ton_amount} Bimcoin`)
+    } else if (depositType === 'Bimcoin' && pendingDeposit.deposit_type === 'Bimcoin') {
+      // For Bimcoin deposits, verify the jetton amount (1:1 with BIM)
+      const expectedBimcoin = parseFloat(pendingDeposit.ton_amount) // ton_amount stores Bimcoin amount for Bimcoin deposits
+      const actualBimcoin = parseFloat(amount)
+      const tolerance = 0.001 // 0.001 Bimcoin tolerance
+
+      if (Math.abs(expectedBimcoin - actualBimcoin) > tolerance) {
+        console.log(`Bimcoin amount mismatch: expected ${expectedBimcoin}, got ${actualBimcoin}`)
+        return false
+      }
+      
+      console.log(`Verified Bimcoin deposit: ${actualBimcoin} Bimcoin = ${pendingDeposit.bim_amount} BIM`)
+    } else {
+      console.log(`Deposit type mismatch: expected ${pendingDeposit.deposit_type}, processing ${depositType}`)
+      return false
     }
 
     // Update deposit status with transaction hash
