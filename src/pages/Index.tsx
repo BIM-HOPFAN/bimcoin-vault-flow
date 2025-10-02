@@ -9,7 +9,7 @@ import WalletConnectButton from '@/components/WalletConnectButton';
 import JettonMinterManager from '@/components/JettonMinterManager';
 import OBABurnCard from '@/components/OBABurnCard';
 import { BIMBurnCard } from '@/components/BIMBurnCard';
-import { BlockchainIntegration } from '@/components/BlockchainIntegration';
+
 import { Card, CardContent } from '@/components/ui/card';
 import { Wallet, TrendingUp, Users, Trophy } from 'lucide-react';
 import { useReferral } from '@/hooks/useReferral';
@@ -89,14 +89,9 @@ const Index = () => {
                 <TaskCard />
               </div>
 
-              {/* Right column - Referrals, Blockchain Integration, and Admin */}
+              {/* Right column - Referrals and Admin */}
               <div className="space-y-6">
                 <ReferralCard />
-                <BlockchainIntegration 
-                  userAddress={address}
-                  bimBalance={userBalances.bim}
-                  onBalanceUpdate={handleBalanceUpdate}
-                />
                 {/* Admin Panel - Only show for development/admin users */}
                 {(address === 'EQBkKJWaEWnpczK4KwKpR0Cb9kLXfB4HMfq_CdKSYlPo1Yrs' || 
                   window.location.hostname === 'localhost' ||
