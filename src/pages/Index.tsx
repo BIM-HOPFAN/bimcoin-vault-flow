@@ -27,12 +27,12 @@ const Index = () => {
     setBalanceUpdateKey(prev => prev + 1);
   }, []);
 
-  // Fetch total users from leaderboard
+  // Fetch total users from leaderboard with auto-refresh
   useEffect(() => {
     const fetchStats = async () => {
       try {
         const { bimCoinAPI } = await import('@/lib/api');
-        const leaderboard = await bimCoinAPI.getLeaderboard(1000); // Get more entries to count
+        const leaderboard = await bimCoinAPI.getLeaderboard(1000);
         setTotalUsers(leaderboard.length);
       } catch (error) {
         console.error('Error fetching stats:', error);
@@ -42,6 +42,9 @@ const Index = () => {
     };
 
     fetchStats();
+    // Auto-refresh every 30 seconds
+    const interval = setInterval(fetchStats, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   // Log referral code for debugging
