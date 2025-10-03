@@ -20,9 +20,28 @@ const Index = () => {
   const { referralCode } = useReferral();
   const [balanceUpdateKey, setBalanceUpdateKey] = useState(0);
   const [userBalances, setUserBalances] = useState({ oba: 0, bim: 0 });
+  const [totalUsers, setTotalUsers] = useState<number>(0);
+  const [isLoadingStats, setIsLoadingStats] = useState(true);
   
   const handleBalanceUpdate = useCallback(() => {
     setBalanceUpdateKey(prev => prev + 1);
+  }, []);
+
+  // Fetch total users from leaderboard
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const { bimCoinAPI } = await import('@/lib/api');
+        const leaderboard = await bimCoinAPI.getLeaderboard(1000); // Get more entries to count
+        setTotalUsers(leaderboard.length);
+      } catch (error) {
+        console.error('Error fetching stats:', error);
+      } finally {
+        setIsLoadingStats(false);
+      }
+    };
+
+    fetchStats();
   }, []);
 
   // Log referral code for debugging
@@ -103,19 +122,14 @@ const Index = () => {
                 <Card className="enhanced-card">
                   <CardContent className="p-4">
                     <h3 className="font-semibold mb-4 text-center">Quick Stats</h3>
-                    <div className="grid grid-cols-2 gap-4 text-center">
-                      <div className="space-y-1">
-                        <div className="flex items-center justify-center gap-1">
-                          <TrendingUp className="w-4 h-4 text-success" />
-                        </div>
-                        <div className="text-lg font-bold text-success">+24.5%</div>
-                        <div className="text-xs text-muted-foreground">24h Change</div>
-                      </div>
+                    <div className="grid grid-cols-1 gap-4 text-center">
                       <div className="space-y-1">
                         <div className="flex items-center justify-center gap-1">
                           <Users className="w-4 h-4 text-primary" />
                         </div>
-                        <div className="text-lg font-bold">12.5K</div>
+                        <div className="text-lg font-bold">
+                          {isLoadingStats ? '...' : totalUsers.toLocaleString()}
+                        </div>
                         <div className="text-xs text-muted-foreground">Total Users</div>
                       </div>
                     </div>
