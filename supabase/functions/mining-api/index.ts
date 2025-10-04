@@ -1,18 +1,11 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders } from '../_shared/cors.ts'
+import { verifyWalletAuth, validateWalletAddress } from '../_shared/auth-verification.ts'
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL') ?? '',
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 )
-
-// Wallet address validation function
-function validateWalletAddress(address: string): boolean {
-  // TON wallet addresses: either raw (48 chars) or user-friendly format (EQ... 48 chars)
-  const rawFormat = /^[0-9A-Za-z_-]{48}$/
-  const userFriendlyFormat = /^[EU]Q[0-9A-Za-z_-]{46}$/
-  return rawFormat.test(address) || userFriendlyFormat.test(address)
-}
 
 Deno.serve(async (req) => {
   // Handle CORS preflight requests
@@ -27,9 +20,15 @@ Deno.serve(async (req) => {
     switch (req.method) {
       case 'POST':
         if (path === 'start') {
-          return await startMining(req)
+          // Verify wallet authentication for starting mining
+          const { walletAddress: authWallet, errorResponse } = verifyWalletAuth(req)
+          if (errorResponse) return errorResponse
+          return await startMining(req, authWallet!)
         } else if (path === 'claim') {
-          return await claimMining(req)
+          // Verify wallet authentication for claiming rewards
+          const { walletAddress: authWallet, errorResponse } = verifyWalletAuth(req)
+          if (errorResponse) return errorResponse
+          return await claimMining(req, authWallet!)
         }
         break
 
@@ -62,8 +61,16 @@ Deno.serve(async (req) => {
   }
 })
 
-async function startMining(req: Request) {
+async function startMining(req: Request, authenticatedWallet: string) {
   const { wallet_address } = await req.json()
+
+  // Verify the wallet in the body matches the authenticated wallet
+  if (wallet_address !== authenticatedWallet) {
+    return new Response(JSON.stringify({ error: 'Wallet address mismatch' }), {
+      status: 403,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    })
+  }
 
   if (!wallet_address) {
     return new Response(JSON.stringify({ error: 'Wallet address required' }), {
@@ -192,8 +199,16 @@ async function startMining(req: Request) {
   })
 }
 
-async function claimMining(req: Request) {
+async function claimMining(req: Request, authenticatedWallet: string) {
   const { wallet_address } = await req.json()
+
+  // Verify the wallet in the body matches the authenticated wallet
+  if (wallet_address !== authenticatedWallet) {
+    return new Response(JSON.stringify({ error: 'Wallet address mismatch' }), {
+      status: 403,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    })
+  }
 
   if (!wallet_address) {
     return new Response(JSON.stringify({ error: 'Wallet address required' }), {

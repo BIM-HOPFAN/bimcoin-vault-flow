@@ -1,8 +1,9 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { verifyWalletAuth, validateWalletAddress } from '../_shared/auth-verification.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-wallet-address, x-timestamp, x-signature',
   'Access-Control-Allow-Methods': 'POST, GET, OPTIONS, PUT, DELETE',
 }
 
@@ -50,9 +51,15 @@ Deno.serve(async (req) => {
 
       case 'POST':
         if (path === 'register') {
-          return await registerUser(req)
+          // Verify wallet authentication for register
+          const { walletAddress: authWallet, errorResponse } = verifyWalletAuth(req)
+          if (errorResponse) return errorResponse
+          return await registerUser(req, authWallet!)
         } else if (path === 'activity') {
-          return await updateActivity(req)
+          // Verify wallet authentication for activity update
+          const { walletAddress: authWallet, errorResponse } = verifyWalletAuth(req)
+          if (errorResponse) return errorResponse
+          return await updateActivity(req, authWallet!)
         }
         break
 
@@ -76,14 +83,6 @@ Deno.serve(async (req) => {
     })
   }
 })
-
-// Wallet address validation function
-function validateWalletAddress(address: string): boolean {
-  // TON wallet addresses: either raw (48 chars) or user-friendly format (EQ... 48 chars)
-  const rawFormat = /^[0-9A-Za-z_-]{48}$/
-  const userFriendlyFormat = /^[EU]Q[0-9A-Za-z_-]{46}$/
-  return rawFormat.test(address) || userFriendlyFormat.test(address)
-}
 
 async function getUserProfile(params: URLSearchParams) {
   const walletAddress = params.get('wallet_address')
@@ -117,8 +116,16 @@ async function getUserProfile(params: URLSearchParams) {
   })
 }
 
-async function registerUser(req: Request) {
+async function registerUser(req: Request, authenticatedWallet: string) {
   const { wallet_address, referral_code } = await req.json()
+
+  // Verify the wallet in the body matches the authenticated wallet
+  if (wallet_address !== authenticatedWallet) {
+    return new Response(JSON.stringify({ error: 'Wallet address mismatch' }), {
+      status: 403,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    })
+  }
 
   if (!wallet_address) {
     return new Response(JSON.stringify({ error: 'Wallet address required' }), {
@@ -182,8 +189,16 @@ async function registerUser(req: Request) {
   })
 }
 
-async function updateActivity(req: Request) {
+async function updateActivity(req: Request, authenticatedWallet: string) {
   const { wallet_address } = await req.json()
+
+  // Verify the wallet in the body matches the authenticated wallet
+  if (wallet_address !== authenticatedWallet) {
+    return new Response(JSON.stringify({ error: 'Wallet address mismatch' }), {
+      status: 403,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    })
+  }
 
   if (!wallet_address) {
     return new Response(JSON.stringify({ error: 'Wallet address required' }), {

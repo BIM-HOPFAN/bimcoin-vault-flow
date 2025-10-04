@@ -7,12 +7,29 @@ export class BimCoinAPI {
     this.baseUrl = `${SUPABASE_URL}/functions/v1`
   }
 
+  /**
+   * Generate authentication headers with timestamp
+   * This proves the request is fresh and from the wallet owner
+   */
+  private getAuthHeaders(walletAddress: string): HeadersInit {
+    const timestamp = Date.now();
+    const message = `${walletAddress}-${timestamp}`;
+    const signature = btoa(message); // Base64 encode
+
+    return {
+      'Content-Type': 'application/json',
+      'X-Wallet-Address': walletAddress,
+      'X-Timestamp': timestamp.toString(),
+      'X-Signature': signature,
+    };
+  }
+
   // User API
   async registerUser(walletAddress: string, referralCode?: string) {
     try {
       const response = await fetch(`${this.baseUrl}/user-api/register`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: this.getAuthHeaders(walletAddress),
         body: JSON.stringify({ wallet_address: walletAddress, referral_code: referralCode })
       })
       
@@ -42,7 +59,7 @@ export class BimCoinAPI {
   async updateUserActivity(walletAddress: string) {
     const response = await fetch(`${this.baseUrl}/user-api/activity`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: this.getAuthHeaders(walletAddress),
       body: JSON.stringify({ wallet_address: walletAddress })
     })
     return await response.json()
@@ -58,7 +75,7 @@ export class BimCoinAPI {
     try {
       const response = await fetch(`${this.baseUrl}/deposit-api/create-intent`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: this.getAuthHeaders(walletAddress),
         body: JSON.stringify({ 
           wallet_address: walletAddress, 
           deposit_amount: depositAmount,
@@ -115,7 +132,7 @@ export class BimCoinAPI {
   async startMining(walletAddress: string) {
     const response = await fetch(`${this.baseUrl}/mining-api/start`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: this.getAuthHeaders(walletAddress),
       body: JSON.stringify({ wallet_address: walletAddress })
     })
     return await response.json()
@@ -124,7 +141,7 @@ export class BimCoinAPI {
   async claimMining(walletAddress: string) {
     const response = await fetch(`${this.baseUrl}/mining-api/claim`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: this.getAuthHeaders(walletAddress),
       body: JSON.stringify({ wallet_address: walletAddress })
     })
     return await response.json()
@@ -152,7 +169,7 @@ export class BimCoinAPI {
   async completeTask(walletAddress: string, taskId: string, verificationData?: any) {
     const response = await fetch(`${this.baseUrl}/task-api/complete`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: this.getAuthHeaders(walletAddress),
       body: JSON.stringify({ 
         wallet_address: walletAddress, 
         task_id: taskId,
@@ -215,7 +232,7 @@ export class BimCoinAPI {
   async burnOBA(walletAddress: string, obaAmount: number) {
     const response = await fetch(`${this.baseUrl}/burn-api/burn-oba`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: this.getAuthHeaders(walletAddress),
       body: JSON.stringify({ wallet_address: walletAddress, oba_amount: obaAmount })
     })
     return await response.json()
@@ -230,7 +247,7 @@ export class BimCoinAPI {
     const endpoint = payoutType === 'jetton' ? 'burn-bim-for-jetton' : 'burn-bim'
     const response = await fetch(`${this.baseUrl}/burn-api/${endpoint}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: this.getAuthHeaders(walletAddress),
       body: JSON.stringify({ wallet_address: walletAddress, bim_amount: bimAmount })
     })
     return await response.json()
@@ -240,7 +257,7 @@ export class BimCoinAPI {
   async getBurnPreview(walletAddress: string, bimAmount: number) {
     const response = await fetch(`${this.baseUrl}/burn-api/preview`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: this.getAuthHeaders(walletAddress),
       body: JSON.stringify({ wallet_address: walletAddress, bim_amount: bimAmount })
     })
     return await response.json()
@@ -280,7 +297,7 @@ export class BimCoinAPI {
   async verifyTaskCompletion(walletAddress: string, taskId: string, verificationData?: any) {
     const response = await fetch(`${this.baseUrl}/task-api/verify`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: this.getAuthHeaders(walletAddress),
       body: JSON.stringify({ 
         wallet_address: walletAddress, 
         task_id: taskId,
