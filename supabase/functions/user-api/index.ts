@@ -77,11 +77,26 @@ Deno.serve(async (req) => {
   }
 })
 
+// Wallet address validation function
+function validateWalletAddress(address: string): boolean {
+  // TON wallet addresses: either raw (48 chars) or user-friendly format (EQ... 48 chars)
+  const rawFormat = /^[0-9A-Za-z_-]{48}$/
+  const userFriendlyFormat = /^[EU]Q[0-9A-Za-z_-]{46}$/
+  return rawFormat.test(address) || userFriendlyFormat.test(address)
+}
+
 async function getUserProfile(params: URLSearchParams) {
   const walletAddress = params.get('wallet_address')
   
   if (!walletAddress) {
     return new Response(JSON.stringify({ error: 'Wallet address required' }), {
+      status: 400,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    })
+  }
+
+  if (!validateWalletAddress(walletAddress)) {
+    return new Response(JSON.stringify({ error: 'Invalid wallet address format' }), {
       status: 400,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
@@ -107,6 +122,13 @@ async function registerUser(req: Request) {
 
   if (!wallet_address) {
     return new Response(JSON.stringify({ error: 'Wallet address required' }), {
+      status: 400,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    })
+  }
+
+  if (!validateWalletAddress(wallet_address)) {
+    return new Response(JSON.stringify({ error: 'Invalid wallet address format' }), {
       status: 400,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
@@ -170,6 +192,13 @@ async function updateActivity(req: Request) {
     })
   }
 
+  if (!validateWalletAddress(wallet_address)) {
+    return new Response(JSON.stringify({ error: 'Invalid wallet address format' }), {
+      status: 400,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    })
+  }
+
   const { data, error } = await supabase
     .from('users')
     .update({ last_activity_at: new Date().toISOString() })
@@ -191,6 +220,13 @@ async function getUserStats(params: URLSearchParams) {
   
   if (!walletAddress) {
     return new Response(JSON.stringify({ error: 'Wallet address required' }), {
+      status: 400,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    })
+  }
+
+  if (!validateWalletAddress(walletAddress)) {
+    return new Response(JSON.stringify({ error: 'Invalid wallet address format' }), {
       status: 400,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
