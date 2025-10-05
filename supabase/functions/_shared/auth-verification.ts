@@ -20,16 +20,25 @@ export interface AuthHeaders {
  * Extracts and validates authentication headers from the request
  */
 export function extractAuthHeaders(req: Request): AuthHeaders | null {
-  const walletAddress = req.headers.get('X-Wallet-Address')
-  const timestampStr = req.headers.get('X-Timestamp')
-  const signature = req.headers.get('X-Signature')
+  // Try both case variations for headers (HTTP headers are case-insensitive)
+  const walletAddress = req.headers.get('X-Wallet-Address') || req.headers.get('x-wallet-address')
+  const timestampStr = req.headers.get('X-Timestamp') || req.headers.get('x-timestamp')
+  const signature = req.headers.get('X-Signature') || req.headers.get('x-signature')
+
+  console.log('Auth headers:', { walletAddress, timestampStr, signature })
 
   if (!walletAddress || !timestampStr || !signature) {
+    console.error('Missing auth headers:', { 
+      hasWallet: !!walletAddress, 
+      hasTimestamp: !!timestampStr, 
+      hasSig: !!signature 
+    })
     return null
   }
 
   const timestamp = parseInt(timestampStr, 10)
   if (isNaN(timestamp)) {
+    console.error('Invalid timestamp:', timestampStr)
     return null
   }
 
