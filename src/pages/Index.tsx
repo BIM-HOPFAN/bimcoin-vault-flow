@@ -33,9 +33,10 @@ const Index = () => {
       try {
         const { bimCoinAPI } = await import('@/lib/api');
         const leaderboard = await bimCoinAPI.getLeaderboard(1000);
-        setTotalUsers(leaderboard.length);
+        setTotalUsers(Array.isArray(leaderboard) ? leaderboard.length : 0);
       } catch (error) {
         console.error('Error fetching stats:', error);
+        setTotalUsers(0);
       } finally {
         setIsLoadingStats(false);
       }
@@ -131,7 +132,7 @@ const Index = () => {
                           <Users className="w-4 h-4 text-primary" />
                         </div>
                         <div className="text-lg font-bold">
-                          {isLoadingStats ? '...' : totalUsers.toLocaleString()}
+                          {isLoadingStats ? '...' : (totalUsers ?? 0).toLocaleString()}
                         </div>
                         <div className="text-xs text-muted-foreground">Total Users</div>
                       </div>
