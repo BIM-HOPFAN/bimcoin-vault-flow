@@ -156,11 +156,21 @@ const MiningCard = () => {
   };
 
   const claimRewards = async () => {
-    if (!address || earnedOBA === 0) return;
+    console.log('🎯 Claim button clicked');
+    console.log('📍 Wallet address:', address);
+    console.log('💎 Earned OBA:', earnedOBA);
+    
+    if (!address || earnedOBA === 0) {
+      console.log('❌ Cannot claim - no address or no earnings');
+      return;
+    }
 
     setLoading(true);
     try {
+      console.log('🚀 Calling bimCoinAPI.claimMining with address:', address);
       const result = await bimCoinAPI.claimMining(address);
+      console.log('📨 Result from API:', result);
+      
       if (result.success) {
         toast({
           title: "Rewards claimed",
