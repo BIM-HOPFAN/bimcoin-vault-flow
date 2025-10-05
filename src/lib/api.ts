@@ -139,18 +139,12 @@ export class BimCoinAPI {
   }
 
   async claimMining(walletAddress: string) {
-    console.log('🔐 Claiming mining for wallet:', walletAddress)
-    const headers = this.getAuthHeaders(walletAddress)
-    console.log('📤 Sending headers:', headers)
-    
     const response = await fetch(`${this.baseUrl}/mining-api/claim`, {
       method: 'POST',
-      headers,
+      headers: this.getAuthHeaders(walletAddress),
       body: JSON.stringify({ wallet_address: walletAddress })
     })
-    const result = await response.json()
-    console.log('📥 Claim response:', result)
-    return result
+    return await response.json()
   }
 
   async getMiningStatus(walletAddress: string) {
