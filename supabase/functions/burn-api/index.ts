@@ -124,29 +124,72 @@ serve(async (req) => {
       const jetton_burn_hash = `burn_${Date.now()}_${Math.random().toString(36).substring(7)}`
 
       try {
-        // Update user balances directly since this is an OBA conversion
-        const { error: updateError } = await supabase
+        log('info', 'Starting OBA to BIM conversion', { wallet_address, oba_amount, bim_amount })
+
+        // Step 1: Deduct OBA balance only (BIM will be added by trigger)
+        const { error: obaUpdateError } = await supabase
           .from('users')
           .update({
             oba_balance: user.oba_balance - oba_amount,
-            earned_bim_balance: parseFloat(user.earned_bim_balance || '0') + bim_amount,
-            bim_balance: user.bim_balance + bim_amount,
             updated_at: new Date().toISOString()
           })
           .eq('id', user.id)
 
-        if (updateError) {
-          console.error('User update error:', updateError)
-          throw new Error('Failed to update user balances')
+        if (obaUpdateError) {
+          log('error', 'Failed to deduct OBA balance', { error: obaUpdateError })
+          throw new Error('Failed to update OBA balance')
         }
 
-        // Record the burn transaction
+        // Step 2: Create deposit record with 'pending' status first
+        const { data: depositRecord, error: depositInsertError } = await supabase
+          .from('deposits')
+          .insert({
+            user_id: user.id,
+            deposit_type: 'OBA_Conversion',
+            source_type: 'oba_conversion',
+            ton_amount: 0,
+            bim_amount: bim_amount,
+            oba_reward: 0,
+            status: 'pending',
+            deposit_comment: `OBA to BIM conversion: ${oba_amount} OBA → ${bim_amount} BIM`
+          })
+          .select()
+          .single()
+
+        if (depositInsertError || !depositRecord) {
+          log('error', 'Failed to create deposit record', { error: depositInsertError })
+          // Rollback OBA deduction
+          await supabase
+            .from('users')
+            .update({
+              oba_balance: user.oba_balance,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', user.id)
+          throw new Error('Failed to create deposit record')
+        }
+
+        // Step 3: Update deposit to 'confirmed' - this triggers the balance update function
+        const { error: confirmError } = await supabase
+          .from('deposits')
+          .update({
+            status: 'confirmed',
+            processed_at: new Date().toISOString()
+          })
+          .eq('id', depositRecord.id)
+
+        if (confirmError) {
+          log('error', 'Failed to confirm deposit', { error: confirmError })
+          throw new Error('Failed to confirm deposit')
+        }
+
+        // Step 4: Record the burn transaction
         const { data: burnRecord, error: burnError } = await supabase
           .from('burns')
           .insert({
             user_id: user.id,
             bim_amount: bim_amount,
-            ton_amount: 0, // This will be calculated when burning BIM for TON
+            ton_amount: 0,
             jetton_burn_hash: jetton_burn_hash,
             processed_at: new Date().toISOString(),
             payout_processed: false,
@@ -157,54 +200,49 @@ serve(async (req) => {
           .single()
 
         if (burnError) {
-          console.error('Burn record error:', burnError)
-          // Rollback user balance update
-          await supabase
-            .from('users')
-            .update({
-              oba_balance: user.oba_balance,
-              bim_balance: user.bim_balance,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', user.id)
-          
-          throw new Error('Failed to record burn transaction')
+          log('error', 'Failed to record burn transaction', { error: burnError })
+          // Note: Deposit is already confirmed, so we don't rollback
+          // The balance updates have already been applied by the trigger
         }
 
-        // Create a deposit record for the BIM earned from OBA conversion
-        await supabase
-          .from('deposits')
-          .insert({
-            user_id: user.id,
-            deposit_type: 'OBA_Conversion',
-            source_type: 'oba_conversion',
-            ton_amount: 0,
-            bim_amount: bim_amount,
-            oba_reward: 0,
-            status: 'completed',
-            processed_at: new Date().toISOString(),
-            deposit_comment: `OBA to BIM conversion: ${oba_amount} OBA → ${bim_amount} BIM`
-          })
+        // Fetch updated user balances
+        const { data: updatedUser } = await supabase
+          .from('users')
+          .select('oba_balance, bim_balance, earned_bim_balance')
+          .eq('id', user.id)
+          .single()
 
-        console.log(`OBA burn successful: ${oba_amount} OBA → ${bim_amount} BIM for user ${wallet_address}`)
+        log('info', 'OBA conversion completed successfully', {
+          wallet_address,
+          oba_burned: oba_amount,
+          bim_received: bim_amount,
+          new_balances: updatedUser
+        })
 
         return new Response(
           JSON.stringify({
             success: true,
-            burn_id: burnRecord.id,
+            burn_id: burnRecord?.id || depositRecord.id,
+            deposit_id: depositRecord.id,
             oba_burned: oba_amount,
             bim_received: bim_amount,
             burn_hash: jetton_burn_hash,
-            new_oba_balance: user.oba_balance - oba_amount,
-            new_bim_balance: user.bim_balance + bim_amount
+            new_oba_balance: updatedUser?.oba_balance || (user.oba_balance - oba_amount),
+            new_bim_balance: updatedUser?.bim_balance || (user.bim_balance + bim_amount),
+            new_earned_bim_balance: updatedUser?.earned_bim_balance
           }),
           { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
 
       } catch (error) {
-        console.error('Transaction error:', error)
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+        log('error', 'OBA to BIM conversion failed', { error: errorMessage, wallet_address, oba_amount })
         return new Response(
-          JSON.stringify({ success: false, error: 'Failed to process burn transaction' }),
+          JSON.stringify({ 
+            success: false, 
+            error: 'Failed to process OBA burn transaction',
+            details: errorMessage 
+          }),
           { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
       }
