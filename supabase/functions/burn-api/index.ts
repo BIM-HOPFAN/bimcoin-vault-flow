@@ -248,9 +248,11 @@ serve(async (req) => {
       }
     }
 
-    // Burn BIM for TON with penalty logic
+    // Burn BIM for TON payout
     if (req.method === 'POST' && path === '/burn-bim') {
       const { wallet_address, bim_amount } = await req.json()
+
+      log('info', 'BIM to TON burn request', { wallet_address, bim_amount })
 
       if (!wallet_address || !bim_amount || bim_amount <= 0) {
         return new Response(
@@ -261,7 +263,7 @@ serve(async (req) => {
 
       const burnAmount = parseFloat(bim_amount)
       
-      // Get burn rate from config
+      // Get burn rate from config (default 200 BIM per TON)
       const { data: burnRateConfig, error: configError } = await supabase
         .from('config')
         .select('value')
@@ -269,7 +271,7 @@ serve(async (req) => {
         .single()
 
       if (configError) {
-        console.error('Failed to get burn rate config:', configError)
+        log('error', 'Failed to get burn rate config', { error: configError })
         return new Response(
           JSON.stringify({ success: false, error: 'Failed to get exchange rate configuration' }),
           { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -279,6 +281,8 @@ serve(async (req) => {
       const burnRateBimPerTon = parseFloat(burnRateConfig.value) // e.g., 200
       const tonAmount = burnAmount / burnRateBimPerTon // e.g., burnAmount / 200
 
+      log('info', 'Exchange rate', { burnRateBimPerTon, burnAmount, tonAmount })
+
       // Get user
       const { data: user, error: userError } = await supabase
         .from('users')
@@ -287,7 +291,7 @@ serve(async (req) => {
         .single()
 
       if (userError || !user) {
-        console.error('User fetch error:', userError)
+        log('error', 'User fetch error', { error: userError, wallet_address })
         return new Response(
           JSON.stringify({ success: false, error: 'User not found' }),
           { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -296,6 +300,11 @@ serve(async (req) => {
 
       // Check if user has enough BIM balance
       if (parseFloat(user.bim_balance) < burnAmount) {
+        log('warn', 'Insufficient BIM balance', { 
+          available: user.bim_balance, 
+          required: burnAmount,
+          wallet_address 
+        })
         return new Response(
           JSON.stringify({ 
             success: false, 
@@ -305,20 +314,24 @@ serve(async (req) => {
         )
       }
 
-      // Determine burn type (no penalty applied)
+      // Determine burn type (no penalty in current implementation)
       const depositBimBalance = parseFloat(user.deposit_bim_balance || '0')
       const earnedBimBalance = parseFloat(user.earned_bim_balance || '0')
       
       let burnType = 'earned_bim'
       let penaltyAmount = 0
-      let finalBurnAmount = burnAmount
-      let actualTonAmount = tonAmount
 
-      // If burning more than earned BIM, we're burning from deposits (no penalty)
+      // If burning more than earned BIM, we're burning from deposits
       if (burnAmount > earnedBimBalance) {
         const depositBurnAmount = burnAmount - earnedBimBalance
         
         if (depositBurnAmount > depositBimBalance) {
+          log('warn', 'Insufficient deposit BIM balance', {
+            earned: earnedBimBalance,
+            deposit: depositBimBalance,
+            required: burnAmount,
+            wallet_address
+          })
           return new Response(
             JSON.stringify({ 
               success: false, 
@@ -328,17 +341,19 @@ serve(async (req) => {
           )
         }
 
-        // No penalty applied
         burnType = 'deposit_bim'
-        
-        console.log(`Burning deposit BIM without penalty: ${depositBurnAmount} BIM, final TON: ${actualTonAmount}`)
+        log('info', 'Burning deposit BIM', { depositBurnAmount, earnedBimBalance })
       }
 
-        try {
-        console.log(`=== Starting BIM to TON burn process ===`)
-        console.log(`User: ${wallet_address}, Amount: ${burnAmount} BIM, Expected TON: ${actualTonAmount}`)
+      try {
+        log('info', 'Starting BIM to TON payout', { 
+          wallet_address, 
+          burnAmount, 
+          tonAmount, 
+          burnType 
+        })
 
-        // Initialize TON client and treasury wallet
+        // Step 1: Initialize TON client and treasury wallet
         const tonClient = new TonClient({
           endpoint: 'https://toncenter.com/api/v2/jsonRPC',
           apiKey: Deno.env.get('TON_CENTER_API_KEY') || ''
@@ -356,22 +371,24 @@ serve(async (req) => {
         })
         const treasuryContract = tonClient.open(treasuryWallet)
 
-        // Check treasury balance
+        // Step 2: Check treasury balance before proceeding
         const treasuryBalance = await treasuryContract.getBalance()
-        const requiredNano = BigInt(Math.floor(actualTonAmount * 1e9))
+        const requiredNano = BigInt(Math.floor(tonAmount * 1e9))
         const treasuryBalanceTon = Number(treasuryBalance) / 1e9
         const requiredTon = Number(requiredNano) / 1e9
         
-        console.log(`Treasury wallet address: ${treasuryWallet.address.toString()}`)
-        console.log(`Treasury balance: ${treasuryBalanceTon} TON`)
-        console.log(`Required amount: ${requiredTon} TON (+ 0.1 TON for fees)`)
+        log('info', 'Treasury wallet check', {
+          address: treasuryWallet.address.toString(),
+          balance: treasuryBalanceTon,
+          required: requiredTon + 0.1
+        })
         
         if (treasuryBalance < requiredNano + BigInt(1e8)) { // Add 0.1 TON for fees
           throw new Error(`Insufficient treasury balance. Has ${treasuryBalanceTon} TON, needs ${requiredTon + 0.1} TON`)
         }
 
-        // Send TON to user
-        console.log(`Sending ${actualTonAmount} TON to ${wallet_address}`)
+        // Step 3: Send TON to user
+        log('info', 'Sending TON transaction', { amount: tonAmount, to: wallet_address })
         const seqno = await treasuryContract.getSeqno()
         
         await treasuryContract.sendTransfer({
@@ -386,7 +403,7 @@ serve(async (req) => {
           ]
         })
 
-        // Wait for transaction confirmation
+        // Step 4: Wait for transaction confirmation
         let currentSeqno = seqno
         let attempts = 0
         while (currentSeqno === seqno && attempts < 30) {
@@ -399,16 +416,16 @@ serve(async (req) => {
           throw new Error('Transaction not confirmed after 60 seconds')
         }
 
-        const ton_payout_hash = `${seqno}_confirmed`
-        console.log(`TON payout successful: ${ton_payout_hash}`)
+        const ton_payout_hash = `ton_${seqno}_${Date.now()}`
+        log('info', 'TON transaction confirmed', { hash: ton_payout_hash })
 
-        // Record the burn transaction - trigger will handle balance updates
+        // Step 5: Record burn transaction - trigger will handle balance updates
         const { data: burnRecord, error: burnError } = await supabase
           .from('burns')
           .insert({
             user_id: user.id,
-            bim_amount: bim_amount,
-            ton_amount: actualTonAmount,
+            bim_amount: burnAmount,
+            ton_amount: tonAmount,
             jetton_burn_hash: `bim_burn_${Date.now()}_${Math.random().toString(36).substring(7)}`,
             ton_payout_hash: ton_payout_hash,
             processed_at: new Date().toISOString(),
@@ -420,46 +437,72 @@ serve(async (req) => {
           .single()
 
         if (burnError) {
-          console.error('Burn record error:', burnError)
-          // Note: We don't rollback BIM here since TON was already sent
-          console.error('CRITICAL: TON sent but failed to record transaction in database')
+          log('error', 'CRITICAL: TON sent but failed to record burn', { 
+            error: burnError, 
+            ton_hash: ton_payout_hash,
+            wallet_address
+          })
+          throw new Error('Failed to record burn transaction - TON already sent, contact support')
         }
 
-        console.log(`BIM burn successful: ${burnAmount} BIM → ${actualTonAmount} TON for user ${wallet_address}`)
+        // Step 6: Fetch updated balances after trigger fires
+        const { data: updatedUser } = await supabase
+          .from('users')
+          .select('bim_balance, deposit_bim_balance, earned_bim_balance')
+          .eq('id', user.id)
+          .single()
+
+        log('info', 'BIM to TON burn completed successfully', {
+          burn_id: burnRecord.id,
+          bim_burned: burnAmount,
+          ton_sent: tonAmount,
+          burn_type: burnType,
+          new_balances: updatedUser
+        })
 
         return new Response(
           JSON.stringify({
             success: true,
-            burn_id: burnRecord?.id || 'unknown',
+            burn_id: burnRecord.id,
             bim_burned: burnAmount,
-            ton_received: actualTonAmount,
+            ton_received: tonAmount,
             penalty_amount: penaltyAmount,
             burn_type: burnType,
             ton_payout_hash: ton_payout_hash,
-            new_bim_balance: parseFloat(user.bim_balance) - burnAmount
+            new_bim_balance: updatedUser?.bim_balance || 0,
+            new_deposit_bim_balance: updatedUser?.deposit_bim_balance || 0,
+            new_earned_bim_balance: updatedUser?.earned_bim_balance || 0
           }),
           { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
 
       } catch (error) {
-        console.error('BIM burn transaction error:', error)
-        
-        // Return more specific error message
         const errorObj = error as Error
-        let errorMessage = 'Failed to process burn transaction'
-        if (errorObj.message?.includes('Insufficient treasury balance')) {
-          errorMessage = 'Treasury wallet has insufficient balance'
-        } else if (errorObj.message?.includes('ADMIN_MNEMONIC not configured')) {
-          errorMessage = 'Treasury wallet not configured'
-        } else if (errorObj.message?.includes('Transaction not confirmed')) {
-          errorMessage = 'TON network transaction failed - your BIM was not deducted'
+        const errorMessage = errorObj.message || 'Unknown error'
+        
+        log('error', 'BIM to TON burn failed', { 
+          error: errorMessage, 
+          wallet_address, 
+          burnAmount 
+        })
+        
+        // Return user-friendly error message
+        let userError = 'Failed to process burn transaction'
+        if (errorMessage.includes('Insufficient treasury balance')) {
+          userError = 'Treasury wallet has insufficient balance. Please contact support.'
+        } else if (errorMessage.includes('not configured')) {
+          userError = 'System configuration error. Please contact support.'
+        } else if (errorMessage.includes('not confirmed')) {
+          userError = 'TON transaction failed - your BIM was not deducted'
+        } else if (errorMessage.includes('TON already sent')) {
+          userError = errorMessage // Critical error - TON sent but DB failed
         }
 
         return new Response(
           JSON.stringify({ 
             success: false, 
-            error: errorMessage,
-            details: errorObj.message 
+            error: userError,
+            details: errorMessage 
           }),
           { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
@@ -469,6 +512,8 @@ serve(async (req) => {
     // Burn BIM for Bimcoin jettons
     if (req.method === 'POST' && path === '/burn-bim-for-jetton') {
       const { wallet_address, bim_amount } = await req.json()
+
+      log('info', 'BIM to Bimcoin jetton burn request', { wallet_address, bim_amount })
 
       if (!wallet_address || !bim_amount) {
         return new Response(
@@ -493,7 +538,7 @@ serve(async (req) => {
         .single()
 
       if (userError || !user) {
-        console.error('User fetch error:', userError)
+        log('error', 'User fetch error', { error: userError, wallet_address })
         return new Response(
           JSON.stringify({ success: false, error: 'User not found' }),
           { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -502,6 +547,11 @@ serve(async (req) => {
 
       // Check if user has enough BIM balance
       if (parseFloat(user.bim_balance) < burnAmount) {
+        log('warn', 'Insufficient BIM balance for jetton burn', {
+          available: user.bim_balance,
+          required: burnAmount,
+          wallet_address
+        })
         return new Response(
           JSON.stringify({ 
             success: false, 
@@ -511,20 +561,25 @@ serve(async (req) => {
         )
       }
 
-      // Determine burn type (no penalty applied)
+      // Determine burn type
       const depositBimBalance = parseFloat(user.deposit_bim_balance || '0')
       const earnedBimBalance = parseFloat(user.earned_bim_balance || '0')
       
       let burnType = 'earned_bim'
       let penaltyAmount = 0
-      let finalBurnAmount = burnAmount
-      let jettonAmount = burnAmount // 1:1 ratio for jettons
+      const jettonAmount = burnAmount // 1:1 ratio for jettons
 
-      // If burning more than earned BIM, we're burning from deposits (no penalty)
+      // If burning more than earned BIM, we're burning from deposits
       if (burnAmount > earnedBimBalance) {
         const depositBurnAmount = burnAmount - earnedBimBalance
         
         if (depositBurnAmount > depositBimBalance) {
+          log('warn', 'Insufficient deposit BIM for jetton burn', {
+            earned: earnedBimBalance,
+            deposit: depositBimBalance,
+            required: burnAmount,
+            wallet_address
+          })
           return new Response(
             JSON.stringify({ 
               success: false, 
@@ -534,14 +589,22 @@ serve(async (req) => {
           )
         }
 
-        // No penalty applied
         burnType = 'deposit_bim'
-        
-        console.log(`Burning deposit BIM without penalty: ${depositBurnAmount} BIM, final jettons: ${jettonAmount}`)
+        log('info', 'Burning deposit BIM for jettons', { 
+          depositBurnAmount, 
+          earnedBimBalance, 
+          jettonAmount 
+        })
       }
 
       try {
-        // Call jetton minter to mint tokens to user's wallet
+        log('info', 'Starting jetton minting process', { 
+          wallet_address, 
+          burnAmount, 
+          jettonAmount 
+        })
+
+        // Step 1: Call jetton minter to mint tokens to user's wallet
         const mintResponse = await supabase.functions.invoke('jetton-minter', {
           body: { 
             action: 'mint', 
@@ -551,17 +614,23 @@ serve(async (req) => {
         })
 
         if (mintResponse.error) {
+          log('error', 'Jetton minting invocation error', { 
+            error: mintResponse.error 
+          })
           throw new Error(`Jetton minting failed: ${mintResponse.error.message}`)
         }
 
         if (!mintResponse.data?.success) {
+          log('error', 'Jetton minting returned failure', { 
+            data: mintResponse.data 
+          })
           throw new Error(`Jetton minting failed: ${mintResponse.data?.error || 'Unknown error'}`)
         }
 
-        const jettonHash = mintResponse.data.transaction_hash || 'pending'
-        console.log(`Jetton minting successful with hash: ${jettonHash}`)
+        const jettonHash = mintResponse.data.transaction_hash || `jetton_${Date.now()}`
+        log('info', 'Jetton minting successful', { hash: jettonHash })
 
-        // Record burn with jetton details
+        // Step 2: Record burn with payout_processed=true (triggers balance update)
         const { data: burnRecord, error: burnError } = await supabase
           .from('burns')
           .insert({
@@ -569,38 +638,78 @@ serve(async (req) => {
             bim_amount: burnAmount,
             ton_amount: 0, // No TON for jetton burns
             jetton_burn_hash: jettonHash,
-            payout_processed: true, // Mark as processed since jettons are minted
+            payout_processed: true, // Triggers balance update
             penalty_amount: penaltyAmount,
-            burn_type: burnType
+            burn_type: burnType,
+            processed_at: new Date().toISOString()
           })
           .select()
           .single()
 
-        if (burnError) throw burnError
+        if (burnError) {
+          log('error', 'CRITICAL: Jettons minted but failed to record burn', {
+            error: burnError,
+            jetton_hash: jettonHash,
+            wallet_address
+          })
+          throw new Error('Failed to record burn transaction - jettons already minted, contact support')
+        }
 
-        console.log(`Burn record created successfully for user ${user.id}`)
+        // Step 3: Fetch updated balances after trigger fires
+        const { data: updatedUser } = await supabase
+          .from('users')
+          .select('bim_balance, deposit_bim_balance, earned_bim_balance')
+          .eq('id', user.id)
+          .single()
+
+        log('info', 'BIM to jetton burn completed successfully', {
+          burn_id: burnRecord.id,
+          bim_burned: burnAmount,
+          jettons_minted: jettonAmount,
+          burn_type: burnType,
+          new_balances: updatedUser
+        })
 
         return new Response(
           JSON.stringify({
             success: true,
+            burn_id: burnRecord.id,
             message: 'BIM burned and Bimcoin jettons minted successfully',
             bim_burned: burnAmount,
             jettons_received: jettonAmount,
             penalty_applied: penaltyAmount,
             burn_type: burnType,
-            jetton_hash: jettonHash
+            jetton_hash: jettonHash,
+            new_bim_balance: updatedUser?.bim_balance || 0,
+            new_deposit_bim_balance: updatedUser?.deposit_bim_balance || 0,
+            new_earned_bim_balance: updatedUser?.earned_bim_balance || 0
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
 
       } catch (error) {
-        console.error('Jetton burn error:', error)
         const errorObj = error as Error
+        const errorMessage = errorObj.message || 'Unknown error'
+        
+        log('error', 'BIM to jetton burn failed', { 
+          error: errorMessage, 
+          wallet_address, 
+          burnAmount 
+        })
+
+        // Return user-friendly error message
+        let userError = 'Failed to mint jettons'
+        if (errorMessage.includes('jettons already minted')) {
+          userError = errorMessage // Critical error - jettons minted but DB failed
+        } else if (errorMessage.includes('not configured')) {
+          userError = 'Jetton minter not configured. Please contact support.'
+        }
+
         return new Response(
           JSON.stringify({ 
             success: false, 
-            error: 'Failed to mint jettons', 
-            details: errorObj.message 
+            error: userError, 
+            details: errorMessage 
           }),
           { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
