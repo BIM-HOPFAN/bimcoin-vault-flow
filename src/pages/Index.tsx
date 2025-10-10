@@ -32,8 +32,10 @@ const Index = () => {
     const fetchStats = async () => {
       try {
         const { bimCoinAPI } = await import('@/lib/api');
-        const leaderboard = await bimCoinAPI.getLeaderboard(1000);
-        setTotalUsers(leaderboard.length);
+        const result = await bimCoinAPI.getLeaderboard(1000);
+        if (result.success && result.leaderboard) {
+          setTotalUsers(result.leaderboard.length);
+        }
       } catch (error) {
         console.error('Error fetching stats:', error);
       } finally {
