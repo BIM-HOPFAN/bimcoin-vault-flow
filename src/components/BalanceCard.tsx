@@ -21,57 +21,32 @@ interface BalanceCardProps {
 const BalanceCard = ({ onBalancesUpdate }: BalanceCardProps) => {
   const [balances, setBalances] = useState<Balances>({ ton: 0, bim: 0, oba: 0, realBimcoin: 0 });
   const [loading, setLoading] = useState(false);
-  const [initializing, setInitializing] = useState(false);
-  const [initError, setInitError] = useState<string | null>(null);
   const [user, setUser] = useState<any>(null);
-  const [tonPrice, setTonPrice] = useState(2.5); // Default to $2.5, will fetch real price
+  const [tonPrice, setTonPrice] = useState(2.5);
   const address = useTonAddress();
   const { toast } = useToast();
 
-  // Initialize user when wallet connects
+  // Initialize user when wallet connects - non-blocking
   const initializeUser = async (walletAddress: string) => {
-    setInitializing(true);
-    setInitError(null);
     try {
-      // Try to get existing user profile
       let userProfile = await bimCoinAPI.getUserProfile(walletAddress);
       
       if (!userProfile.success) {
-        // Check for referral code in localStorage
         const referralCode = localStorage.getItem('referralCode');
-        
-        // Register new user if doesn't exist
-        console.log('Registering new user:', walletAddress, 'with referral:', referralCode);
+        console.log('Registering new user:', walletAddress);
         const registerResult = await bimCoinAPI.registerUser(walletAddress, referralCode || undefined);
         if (registerResult.success) {
           userProfile = await bimCoinAPI.getUserProfile(walletAddress);
-          // Clear referral code after successful registration
-          if (referralCode) {
-            localStorage.removeItem('referralCode');
-          }
-        } else {
-          throw new Error(registerResult.error || 'Failed to register user');
+          if (referralCode) localStorage.removeItem('referralCode');
         }
       }
       
       if (userProfile.user) {
         setUser(userProfile.user);
         console.log('User initialized:', userProfile.user);
-        setInitError(null);
-      } else {
-        throw new Error('Failed to load user profile');
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to initialize user';
-      console.error('Failed to initialize user:', error);
-      setInitError(errorMessage);
-      toast({
-        title: "Connection Error",
-        description: errorMessage,
-        variant: "destructive",
-      });
-    } finally {
-      setInitializing(false);
+      console.error('User init error (non-blocking):', error);
     }
   };
 
@@ -90,74 +65,40 @@ const BalanceCard = ({ onBalancesUpdate }: BalanceCardProps) => {
     }
   };
 
-  // Fetch balances - always get BIM/OBA from user profile, optionally get TON from API
+  // Fetch balances - graceful failure
   const fetchBalances = async () => {
     if (!address) return;
     
     setLoading(true);
-    console.log('Fetching balances for address:', address);
-    
     try {
-      // Always fetch user profile first for BIM/OBA balances
-      console.log('Fetching user profile...');
       const userProfile = await bimCoinAPI.getUserProfile(address);
       
       if (userProfile.user) {
-        console.log('User profile data:', userProfile.user);
         setUser(userProfile.user);
         
-        // Set BIM/OBA balances from database
         const newBalances = {
-          ton: 0, // Will try to get this separately
+          ton: 0,
           bim: parseFloat(userProfile.user.bim_balance || '0'),
           oba: parseFloat(userProfile.user.oba_balance || '0'),
-          realBimcoin: 0 // Will get from API
+          realBimcoin: 0
         };
         
-        // Try to get TON balance and real Bimcoin balance from API
+        // Try blockchain balances (non-blocking)
         try {
-          console.log('Fetching balances from blockchain...');
           const balanceData = await bimCoinAPI.getBalance(address);
           if (balanceData.success) {
-            if (balanceData.ton_balance) {
-              newBalances.ton = parseFloat(balanceData.ton_balance);
-              console.log('TON balance fetched:', newBalances.ton);
-            }
-            if (balanceData.real_bimcoin_balance) {
-              newBalances.realBimcoin = parseFloat(balanceData.real_bimcoin_balance);
-              console.log('Real Bimcoin balance fetched:', newBalances.realBimcoin);
-            }
-          } else {
-            console.log('Balance API failed, using defaults');
+            if (balanceData.ton_balance) newBalances.ton = parseFloat(balanceData.ton_balance);
+            if (balanceData.real_bimcoin_balance) newBalances.realBimcoin = parseFloat(balanceData.real_bimcoin_balance);
           }
-        } catch (balanceError) {
-          console.log('Balance fetch error:', balanceError);
+        } catch (e) {
+          console.log('Blockchain balance fetch failed (non-critical):', e);
         }
         
         setBalances(newBalances);
-        console.log('Final balances set:', newBalances);
-        
-        // Notify parent component of balance changes
-        onBalancesUpdate?.({
-          oba: newBalances.oba,
-          bim: newBalances.bim
-        });
-        
-      } else {
-        console.error('Failed to fetch user profile:', userProfile);
-        toast({
-          title: "Failed to fetch profile",
-          description: "Could not load your account data",
-          variant: "destructive",
-        });
+        onBalancesUpdate?.({ oba: newBalances.oba, bim: newBalances.bim });
       }
     } catch (error) {
-      console.error('Error in fetchBalances:', error);
-      toast({
-        title: "Failed to fetch balances",
-        description: "There was an error getting your wallet balances",
-        variant: "destructive",
-      });
+      console.error('Balance fetch error:', error);
     } finally {
       setLoading(false);
     }
@@ -210,72 +151,18 @@ const BalanceCard = ({ onBalancesUpdate }: BalanceCardProps) => {
   };
 
   useEffect(() => {
-    // Fetch TON price on component mount
     fetchTonPrice();
     
     if (address) {
-      const init = async () => {
-        await initializeUser(address);
-        await fetchBalances();
-        // Check for pending deposits that might need processing
-        setTimeout(() => triggerDepositCheck(), 3000);
-      };
-      init().catch(error => {
-        console.error('Initialization error:', error);
-      });
+      initializeUser(address);
+      fetchBalances();
+      setTimeout(() => triggerDepositCheck().catch(e => console.log('Deposit check failed:', e)), 3000);
     } else {
       setBalances({ ton: 0, bim: 0, oba: 0, realBimcoin: 0 });
       setUser(null);
     }
   }, [address]);
 
-
-  // Show loading state during initialization
-  if (initializing && !user) {
-    return (
-      <Card className="enhanced-card">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Wallet className="w-5 h-5 text-primary" />
-            Portfolio Balance
-          </CardTitle>
-          <CardDescription>
-            Initializing your account...
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex items-center justify-center py-8">
-          <RefreshCw className="w-6 h-6 animate-spin text-primary" />
-        </CardContent>
-      </Card>
-    );
-  }
-
-  // Show error state if initialization failed
-  if (initError && !user) {
-    return (
-      <Card className="enhanced-card border-destructive">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-destructive">
-            <Wallet className="w-5 h-5" />
-            Connection Error
-          </CardTitle>
-          <CardDescription>
-            {initError}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Button 
-            onClick={() => address && initializeUser(address)}
-            variant="outline"
-            className="w-full"
-          >
-            <RefreshCw className="w-4 h-4 mr-2" />
-            Retry Connection
-          </Button>
-        </CardContent>
-      </Card>
-    );
-  }
 
   return (
     <Card className="enhanced-card">
