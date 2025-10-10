@@ -33,7 +33,7 @@ const Index = () => {
       try {
         const { bimCoinAPI } = await import('@/lib/api');
         const result = await bimCoinAPI.getLeaderboard(1000);
-        if (result.success && result.leaderboard) {
+        if (result && result.leaderboard && !result.error) {
           setTotalUsers(result.leaderboard.length);
         }
       } catch (error) {
