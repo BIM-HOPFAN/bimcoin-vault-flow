@@ -21,6 +21,8 @@ interface BalanceCardProps {
 const BalanceCard = ({ onBalancesUpdate }: BalanceCardProps) => {
   const [balances, setBalances] = useState<Balances>({ ton: 0, bim: 0, oba: 0, realBimcoin: 0 });
   const [loading, setLoading] = useState(false);
+  const [initializing, setInitializing] = useState(false);
+  const [initError, setInitError] = useState<string | null>(null);
   const [user, setUser] = useState<any>(null);
   const [tonPrice, setTonPrice] = useState(2.5); // Default to $2.5, will fetch real price
   const address = useTonAddress();
@@ -28,6 +30,8 @@ const BalanceCard = ({ onBalancesUpdate }: BalanceCardProps) => {
 
   // Initialize user when wallet connects
   const initializeUser = async (walletAddress: string) => {
+    setInitializing(true);
+    setInitError(null);
     try {
       // Try to get existing user profile
       let userProfile = await bimCoinAPI.getUserProfile(walletAddress);
@@ -45,15 +49,29 @@ const BalanceCard = ({ onBalancesUpdate }: BalanceCardProps) => {
           if (referralCode) {
             localStorage.removeItem('referralCode');
           }
+        } else {
+          throw new Error(registerResult.error || 'Failed to register user');
         }
       }
       
       if (userProfile.user) {
         setUser(userProfile.user);
         console.log('User initialized:', userProfile.user);
+        setInitError(null);
+      } else {
+        throw new Error('Failed to load user profile');
       }
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to initialize user';
       console.error('Failed to initialize user:', error);
+      setInitError(errorMessage);
+      toast({
+        title: "Connection Error",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setInitializing(false);
     }
   };
 
@@ -196,16 +214,68 @@ const BalanceCard = ({ onBalancesUpdate }: BalanceCardProps) => {
     fetchTonPrice();
     
     if (address) {
-      initializeUser(address);
-      fetchBalances();
-      // Check for pending deposits that might need processing
-      setTimeout(() => triggerDepositCheck(), 3000);
+      const init = async () => {
+        await initializeUser(address);
+        await fetchBalances();
+        // Check for pending deposits that might need processing
+        setTimeout(() => triggerDepositCheck(), 3000);
+      };
+      init().catch(error => {
+        console.error('Initialization error:', error);
+      });
     } else {
       setBalances({ ton: 0, bim: 0, oba: 0, realBimcoin: 0 });
       setUser(null);
     }
   }, [address]);
 
+
+  // Show loading state during initialization
+  if (initializing && !user) {
+    return (
+      <Card className="enhanced-card">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Wallet className="w-5 h-5 text-primary" />
+            Portfolio Balance
+          </CardTitle>
+          <CardDescription>
+            Initializing your account...
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex items-center justify-center py-8">
+          <RefreshCw className="w-6 h-6 animate-spin text-primary" />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Show error state if initialization failed
+  if (initError && !user) {
+    return (
+      <Card className="enhanced-card border-destructive">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-destructive">
+            <Wallet className="w-5 h-5" />
+            Connection Error
+          </CardTitle>
+          <CardDescription>
+            {initError}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button 
+            onClick={() => address && initializeUser(address)}
+            variant="outline"
+            className="w-full"
+          >
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Retry Connection
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card className="enhanced-card">
