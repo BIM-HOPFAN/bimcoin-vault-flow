@@ -117,7 +117,7 @@ const Index = () => {
                 {/* Admin Panel - Only show for development/admin users */}
                 {(address === 'EQBkKJWaEWnpczK4KwKpR0Cb9kLXfB4HMfq_CdKSYlPo1Yrs' || 
                   window.location.hostname === 'localhost' ||
-                  window.location.hostname === 'bimlight.org') && (
+                  window.location.hostname.includes('lovableproject.com')) && (
                   <JettonMinterManager />
                 )}
                 
