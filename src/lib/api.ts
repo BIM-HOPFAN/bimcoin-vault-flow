@@ -66,19 +66,8 @@ export class BimCoinAPI {
   }
 
   async getLeaderboard(limit = 10) {
-    try {
-      const response = await fetch(`${this.baseUrl}/user-api/leaderboard?limit=${limit}`)
-      const data = await response.json()
-      
-      if (!response.ok) {
-        return { error: data.error || `HTTP ${response.status}: Failed to fetch leaderboard` }
-      }
-      
-      return data
-    } catch (error) {
-      console.error('Get leaderboard error:', error)
-      return { error: 'Network error: Unable to fetch leaderboard' }
-    }
+    const response = await fetch(`${this.baseUrl}/user-api/leaderboard?limit=${limit}`)
+    return await response.json()
   }
 
   // Deposit API

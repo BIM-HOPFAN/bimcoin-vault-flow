@@ -22,22 +22,29 @@ const BalanceCard = ({ onBalancesUpdate }: BalanceCardProps) => {
   const [balances, setBalances] = useState<Balances>({ ton: 0, bim: 0, oba: 0, realBimcoin: 0 });
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState<any>(null);
-  const [tonPrice, setTonPrice] = useState(2.5);
+  const [tonPrice, setTonPrice] = useState(2.5); // Default to $2.5, will fetch real price
   const address = useTonAddress();
   const { toast } = useToast();
 
-  // Initialize user when wallet connects - non-blocking
+  // Initialize user when wallet connects
   const initializeUser = async (walletAddress: string) => {
     try {
+      // Try to get existing user profile
       let userProfile = await bimCoinAPI.getUserProfile(walletAddress);
       
       if (!userProfile.success) {
+        // Check for referral code in localStorage
         const referralCode = localStorage.getItem('referralCode');
-        console.log('Registering new user:', walletAddress);
+        
+        // Register new user if doesn't exist
+        console.log('Registering new user:', walletAddress, 'with referral:', referralCode);
         const registerResult = await bimCoinAPI.registerUser(walletAddress, referralCode || undefined);
         if (registerResult.success) {
           userProfile = await bimCoinAPI.getUserProfile(walletAddress);
-          if (referralCode) localStorage.removeItem('referralCode');
+          // Clear referral code after successful registration
+          if (referralCode) {
+            localStorage.removeItem('referralCode');
+          }
         }
       }
       
@@ -46,7 +53,7 @@ const BalanceCard = ({ onBalancesUpdate }: BalanceCardProps) => {
         console.log('User initialized:', userProfile.user);
       }
     } catch (error) {
-      console.error('User init error (non-blocking):', error);
+      console.error('Failed to initialize user:', error);
     }
   };
 
@@ -65,40 +72,74 @@ const BalanceCard = ({ onBalancesUpdate }: BalanceCardProps) => {
     }
   };
 
-  // Fetch balances - graceful failure
+  // Fetch balances - always get BIM/OBA from user profile, optionally get TON from API
   const fetchBalances = async () => {
     if (!address) return;
     
     setLoading(true);
+    console.log('Fetching balances for address:', address);
+    
     try {
+      // Always fetch user profile first for BIM/OBA balances
+      console.log('Fetching user profile...');
       const userProfile = await bimCoinAPI.getUserProfile(address);
       
       if (userProfile.user) {
+        console.log('User profile data:', userProfile.user);
         setUser(userProfile.user);
         
+        // Set BIM/OBA balances from database
         const newBalances = {
-          ton: 0,
+          ton: 0, // Will try to get this separately
           bim: parseFloat(userProfile.user.bim_balance || '0'),
           oba: parseFloat(userProfile.user.oba_balance || '0'),
-          realBimcoin: 0
+          realBimcoin: 0 // Will get from API
         };
         
-        // Try blockchain balances (non-blocking)
+        // Try to get TON balance and real Bimcoin balance from API
         try {
+          console.log('Fetching balances from blockchain...');
           const balanceData = await bimCoinAPI.getBalance(address);
           if (balanceData.success) {
-            if (balanceData.ton_balance) newBalances.ton = parseFloat(balanceData.ton_balance);
-            if (balanceData.real_bimcoin_balance) newBalances.realBimcoin = parseFloat(balanceData.real_bimcoin_balance);
+            if (balanceData.ton_balance) {
+              newBalances.ton = parseFloat(balanceData.ton_balance);
+              console.log('TON balance fetched:', newBalances.ton);
+            }
+            if (balanceData.real_bimcoin_balance) {
+              newBalances.realBimcoin = parseFloat(balanceData.real_bimcoin_balance);
+              console.log('Real Bimcoin balance fetched:', newBalances.realBimcoin);
+            }
+          } else {
+            console.log('Balance API failed, using defaults');
           }
-        } catch (e) {
-          console.log('Blockchain balance fetch failed (non-critical):', e);
+        } catch (balanceError) {
+          console.log('Balance fetch error:', balanceError);
         }
         
         setBalances(newBalances);
-        onBalancesUpdate?.({ oba: newBalances.oba, bim: newBalances.bim });
+        console.log('Final balances set:', newBalances);
+        
+        // Notify parent component of balance changes
+        onBalancesUpdate?.({
+          oba: newBalances.oba,
+          bim: newBalances.bim
+        });
+        
+      } else {
+        console.error('Failed to fetch user profile:', userProfile);
+        toast({
+          title: "Failed to fetch profile",
+          description: "Could not load your account data",
+          variant: "destructive",
+        });
       }
     } catch (error) {
-      console.error('Balance fetch error:', error);
+      console.error('Error in fetchBalances:', error);
+      toast({
+        title: "Failed to fetch balances",
+        description: "There was an error getting your wallet balances",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
@@ -151,12 +192,14 @@ const BalanceCard = ({ onBalancesUpdate }: BalanceCardProps) => {
   };
 
   useEffect(() => {
+    // Fetch TON price on component mount
     fetchTonPrice();
     
     if (address) {
       initializeUser(address);
       fetchBalances();
-      setTimeout(() => triggerDepositCheck().catch(e => console.log('Deposit check failed:', e)), 3000);
+      // Check for pending deposits that might need processing
+      setTimeout(() => triggerDepositCheck(), 3000);
     } else {
       setBalances({ ton: 0, bim: 0, oba: 0, realBimcoin: 0 });
       setUser(null);
