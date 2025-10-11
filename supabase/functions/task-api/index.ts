@@ -298,13 +298,24 @@ async function deleteTask(taskId: string) {
 
 // Enhanced task completion with verification
 async function completeTaskWithVerification(req: Request) {
-  try {
-    const { wallet_address, task_id, verification_data } = await req.json()
+  const { wallet_address, task_id, verification_data } = await req.json()
 
-    // Validate verification data if provided
-    if (verification_data && Object.keys(verification_data).length > 0) {
+  // Validate verification data if provided
+  if (verification_data && Object.keys(verification_data).length > 0) {
+    try {
       validateVerificationData(verification_data)
+    } catch (validationError) {
+      return new Response(
+        JSON.stringify({ 
+          error: validationError instanceof Error ? validationError.message : 'Invalid verification data' 
+        }),
+        { 
+          status: 400, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      )
     }
+  }
 
   if (!wallet_address || !task_id) {
     return new Response(JSON.stringify({ error: 'Wallet address and task ID required' }), {
