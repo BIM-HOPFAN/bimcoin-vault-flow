@@ -1,5 +1,8 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders } from '../_shared/cors.ts'
+import { verifyWalletAuth } from '../_shared/auth-verification.ts'
+import { verifyAdminAuth } from '../_shared/admin-verification.ts'
+import { validateTaskData, validateTaskUpdateData, validateVerificationData } from '../_shared/task-validation.ts'
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL') ?? '',
@@ -18,8 +21,16 @@ Deno.serve(async (req) => {
     const path = pathSegments[pathSegments.length - 1]
     const secondLastPath = pathSegments[pathSegments.length - 2]
 
-    // Admin routes
+    // Admin routes - require wallet authentication and admin verification
     if (secondLastPath === 'admin') {
+      // Verify wallet authentication first
+      const { walletAddress, errorResponse: authError } = verifyWalletAuth(req)
+      if (authError) return authError
+
+      // Verify admin authorization
+      const { isAdmin, errorResponse: adminError } = await verifyAdminAuth(walletAddress!, supabase)
+      if (adminError) return adminError
+
       switch (req.method) {
         case 'GET':
           if (path === 'tasks') {
@@ -189,64 +200,85 @@ async function getAdminTasks() {
 }
 
 async function createTask(req: Request) {
-  const taskData = await req.json()
+  try {
+    const rawData = await req.json()
+    
+    // Validate and sanitize input
+    const taskData = validateTaskData(rawData)
   
-  const { data: task, error } = await supabase
-    .from('tasks')
-    .insert({
-      title: taskData.title,
-      description: taskData.description,
-      reward_amount: taskData.reward_amount,
-      task_type: taskData.task_type,
-      external_url: taskData.external_url,
-      is_active: taskData.is_active,
-      daily_limit: taskData.daily_limit,
-      verification_type: taskData.verification_type || 'manual',
-      verification_data: taskData.verification_data || {},
-      completion_timeout: taskData.completion_timeout || 300
+    const { data: task, error } = await supabase
+      .from('tasks')
+      .insert({
+        title: taskData.title,
+        description: taskData.description,
+        reward_amount: taskData.reward_amount,
+        task_type: taskData.task_type,
+        external_url: taskData.external_url || null,
+        is_active: taskData.is_active,
+        daily_limit: taskData.daily_limit,
+        verification_type: taskData.verification_type,
+        verification_data: taskData.verification_data,
+        completion_timeout: taskData.completion_timeout
+      })
+      .select()
+      .single()
+
+    if (error) throw error
+
+    return new Response(JSON.stringify({ 
+      success: true, 
+      data: task 
+    }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
-    .select()
-    .single()
-
-  if (error) throw error
-
-  return new Response(JSON.stringify({ 
-    success: true, 
-    data: task 
-  }), {
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-  })
+  } catch (validationError) {
+    return new Response(
+      JSON.stringify({ 
+        success: false, 
+        error: validationError instanceof Error ? validationError.message : 'Validation failed' 
+      }),
+      { 
+        status: 400, 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      }
+    )
+  }
 }
 
 async function updateTask(req: Request, taskId: string) {
-  const taskData = await req.json()
+  try {
+    const rawData = await req.json()
+    
+    // Validate and sanitize input
+    const updateData = validateTaskUpdateData(rawData)
   
-  const { data: task, error } = await supabase
-    .from('tasks')
-    .update({
-      title: taskData.title,
-      description: taskData.description,
-      reward_amount: taskData.reward_amount,
-      task_type: taskData.task_type,
-      external_url: taskData.external_url,
-      is_active: taskData.is_active,
-      daily_limit: taskData.daily_limit,
-      verification_type: taskData.verification_type,
-      verification_data: taskData.verification_data,
-      completion_timeout: taskData.completion_timeout
+    const { data: task, error } = await supabase
+      .from('tasks')
+      .update(updateData)
+      .eq('id', taskId)
+      .select()
+      .single()
+
+    if (error) throw error
+
+    return new Response(JSON.stringify({ 
+      success: true, 
+      data: task 
+    }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
-    .eq('id', taskId)
-    .select()
-    .single()
-
-  if (error) throw error
-
-  return new Response(JSON.stringify({ 
-    success: true, 
-    data: task 
-  }), {
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-  })
+  } catch (validationError) {
+    return new Response(
+      JSON.stringify({ 
+        success: false, 
+        error: validationError instanceof Error ? validationError.message : 'Validation failed' 
+      }),
+      { 
+        status: 400, 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      }
+    )
+  }
 }
 
 async function deleteTask(taskId: string) {
@@ -266,7 +298,13 @@ async function deleteTask(taskId: string) {
 
 // Enhanced task completion with verification
 async function completeTaskWithVerification(req: Request) {
-  const { wallet_address, task_id, verification_data } = await req.json()
+  try {
+    const { wallet_address, task_id, verification_data } = await req.json()
+
+    // Validate verification data if provided
+    if (verification_data && Object.keys(verification_data).length > 0) {
+      validateVerificationData(verification_data)
+    }
 
   if (!wallet_address || !task_id) {
     return new Response(JSON.stringify({ error: 'Wallet address and task ID required' }), {
