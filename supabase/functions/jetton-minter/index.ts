@@ -95,7 +95,7 @@ async function deployJettonMinter() {
     jettonContentDict.set(nameKey, beginCell().storeUint(0, 8).storeStringTail('Bimcoin').endCell())
     jettonContentDict.set(symbolKey, beginCell().storeUint(0, 8).storeStringTail('BIM').endCell())
     jettonContentDict.set(decimalsKey, beginCell().storeUint(0, 8).storeStringTail('9').endCell())
-    jettonContentDict.set(imageKey, beginCell().storeUint(0, 8).storeStringTail('https://db23b08d-08a2-4e7e-b648-6f394e9e12c2.lovableproject.com/icon-512x512.png').endCell())
+    jettonContentDict.set(imageKey, beginCell().storeUint(0, 8).storeStringTail('https://bimlight.org/icon-512x512.png').endCell())
     
     const jettonContent = beginCell()
       .storeUint(0, 8) // onchain content flag
