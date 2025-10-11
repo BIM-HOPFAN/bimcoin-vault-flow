@@ -5,7 +5,7 @@ import { mnemonicToWalletKey } from 'https://esm.sh/@ton/crypto@3.3.0'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-wallet-address, x-timestamp, x-signature',
 }
 
 // Rate limiting and monitoring
