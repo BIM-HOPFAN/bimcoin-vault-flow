@@ -67,7 +67,8 @@ export class BimCoinAPI {
 
   async getLeaderboard(limit = 10) {
     const response = await fetch(`${this.baseUrl}/user-api/leaderboard?limit=${limit}`)
-    return await response.json()
+    const data = await response.json()
+    return data.leaderboard || []
   }
 
   // Deposit API
