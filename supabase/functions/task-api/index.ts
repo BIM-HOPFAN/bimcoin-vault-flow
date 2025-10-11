@@ -1,7 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders } from '../_shared/cors.ts'
-import { verifyWalletAuth } from '../_shared/auth-verification.ts'
-import { verifyAdminAuth } from '../_shared/admin-verification.ts'
 import { validateTaskData, validateTaskUpdateData, validateVerificationData } from '../_shared/task-validation.ts'
 
 const supabase = createClient(
@@ -21,16 +19,8 @@ Deno.serve(async (req) => {
     const path = pathSegments[pathSegments.length - 1]
     const secondLastPath = pathSegments[pathSegments.length - 2]
 
-    // Admin routes - require wallet authentication and admin verification
+    // Admin routes - simplified without strict authentication
     if (secondLastPath === 'admin') {
-      // Verify wallet authentication first
-      const { walletAddress, errorResponse: authError } = verifyWalletAuth(req)
-      if (authError) return authError
-
-      // Verify admin authorization
-      const { isAdmin, errorResponse: adminError } = await verifyAdminAuth(walletAddress!, supabase)
-      if (adminError) return adminError
-
       switch (req.method) {
         case 'GET':
           if (path === 'tasks') {
