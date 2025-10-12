@@ -364,54 +364,89 @@ async function processDeposit(depositComment: string, txHash: string, amount: st
 // Helper function to handle referral rewards
 async function handleReferralReward(deposit: any) {
   try {
+    // Check if this is the first deposit for referral
+    const { count: depositCount } = await supabase
+      .from('deposits')
+      .select('*', { count: 'exact' })
+      .eq('user_id', deposit.user_id)
+      .eq('status', 'confirmed')
+
+    if (depositCount !== 1) {
+      console.log('Not first deposit, skipping referral reward')
+      return
+    }
+
+    // Check if referrer already had a successful referral today
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    
+    const { count: todayReferralCount } = await supabase
+      .from('referrals')
+      .select('*', { count: 'exact' })
+      .eq('referrer_id', deposit.users.referred_by)
+      .eq('status', 'completed')
+      .gte('completed_at', today.toISOString())
+
+    if ((todayReferralCount || 0) > 0) {
+      console.log('Referrer already had referral today, skipping')
+      return
+    }
+
     const { data: referralConfig } = await supabase
       .from('config')
       .select('value')
       .eq('key', 'referral_rate')
       .single()
 
-    if (referralConfig) {
-      const referralRate = parseFloat(referralConfig.value)
-      const referralReward = parseFloat(deposit.bim_amount) * referralRate
+    if (!referralConfig) {
+      console.log('Referral rate config not found')
+      return
+    }
 
-      // Check if this is the first deposit for referral
-      const { count: depositCount } = await supabase
-        .from('deposits')
-        .select('*', { count: 'exact' })
-        .eq('user_id', deposit.user_id)
-        .eq('status', 'confirmed')
+    const referralRate = parseFloat(referralConfig.value)
+    
+    // Get referrer's active BIM deposits using the database function
+    const { data: referrerActiveBim } = await supabase
+      .rpc('get_active_deposit_bim', { user_uuid: deposit.users.referred_by })
 
-      if (depositCount === 1) {
-        // Create referral record and deposit entry for reward
-        const { data: referralRecord } = await supabase
-          .from('referrals')
-          .insert({
-            referrer_id: deposit.users.referred_by,
-            referee_id: deposit.user_id,
-            first_deposit_id: deposit.id,
-            reward_amount: referralReward.toString(),
-            status: 'completed',
-            completed_at: new Date().toISOString()
-          })
-          .select()
-          .single()
+    if (!referrerActiveBim || referrerActiveBim <= 0) {
+      console.log('Referrer has no active BIM deposits, skipping reward')
+      return
+    }
 
-        // Create a deposit entry for the referral reward (will trigger balance update)
-        await supabase
-          .from('deposits')
-          .insert({
-            user_id: deposit.users.referred_by,
-            ton_amount: '0',
-            bim_amount: referralReward.toString(),
-            source_type: 'oba_conversion', // Using oba_conversion as it goes to earned_bim_balance
-            deposit_type: 'Referral',
-            deposit_comment: `REFERRAL:REWARD:${referralRecord?.id || Date.now()}`,
-            status: 'confirmed',
-            processed_at: new Date().toISOString()
-          })
+    const referralReward = referrerActiveBim * referralRate
 
-        console.log(`Referral reward created: ${referralReward} BIM for referrer ${deposit.users.referred_by}`)
-      }
+    // Create referral record
+    const { data: referralRecord } = await supabase
+      .from('referrals')
+      .insert({
+        referrer_id: deposit.users.referred_by,
+        referee_id: deposit.user_id,
+        first_deposit_id: deposit.id,
+        reward_amount: referralReward.toString(),
+        status: 'completed',
+        completed_at: new Date().toISOString()
+      })
+      .select()
+      .single()
+
+    // Update referrer's OBA balance directly
+    const { data: referrer } = await supabase
+      .from('users')
+      .select('oba_balance, total_earned_from_referrals')
+      .eq('id', deposit.users.referred_by)
+      .single()
+
+    if (referrer) {
+      await supabase
+        .from('users')
+        .update({
+          oba_balance: (parseFloat(referrer.oba_balance) + referralReward).toString(),
+          total_earned_from_referrals: (parseFloat(referrer.total_earned_from_referrals) + referralReward).toString()
+        })
+        .eq('id', deposit.users.referred_by)
+
+      console.log(`Referral reward processed: ${referralReward} OBA for referrer ${deposit.users.referred_by}`)
     }
   } catch (error) {
     console.error('Error handling referral reward:', error)
