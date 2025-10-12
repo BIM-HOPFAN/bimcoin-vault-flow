@@ -71,7 +71,7 @@ const ReferralCard = () => {
       navigator.clipboard.writeText(referralLink);
       toast({
         title: "Referral link copied",
-        description: "Share this link to earn 2% OBA on valid deposits!",
+        description: "Share this link to earn 2% OBA based on your BIM deposits!",
         variant: "default",
       });
     }
@@ -97,7 +97,7 @@ const ReferralCard = () => {
           Referral Program
         </CardTitle>
         <CardDescription>
-          Earn 2% OBA on every valid deposit from your referrals
+          Earn 2% OBA based on your active BIM deposits when referrals make their first deposit
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -150,9 +150,9 @@ const ReferralCard = () => {
             </div>
             <ul className="text-xs space-y-1 ml-4">
               <li>• Share your referral link with friends</li>
-              <li>• They make their first valid deposit (≥1 TON)</li>
-              <li>• You earn 2% OBA bonus on their deposit amount</li>
-              <li>• Rewards are credited within 365 days</li>
+              <li>• When they make their first valid deposit (≥1 TON)</li>
+              <li>• You earn 2% OBA based on YOUR active BIM deposits</li>
+              <li>• Only 1 referral reward per day, bonus credited instantly</li>
             </ul>
           </div>
         </div>
