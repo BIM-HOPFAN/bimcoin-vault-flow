@@ -32,7 +32,7 @@ const BalanceCard = ({ onBalancesUpdate }: BalanceCardProps) => {
       // Try to get existing user profile
       let userProfile = await bimCoinAPI.getUserProfile(walletAddress);
       
-      if (!userProfile.success) {
+      if (!userProfile.data) {
         // Check for referral code in localStorage
         const referralCode = localStorage.getItem('referralCode');
         
@@ -48,9 +48,9 @@ const BalanceCard = ({ onBalancesUpdate }: BalanceCardProps) => {
         }
       }
       
-      if (userProfile.user) {
-        setUser(userProfile.user);
-        console.log('User initialized:', userProfile.user);
+      if (userProfile.data) {
+        setUser(userProfile.data);
+        console.log('User initialized:', userProfile.data);
       }
     } catch (error) {
       console.error('Failed to initialize user:', error);
@@ -84,15 +84,15 @@ const BalanceCard = ({ onBalancesUpdate }: BalanceCardProps) => {
       console.log('Fetching user profile...');
       const userProfile = await bimCoinAPI.getUserProfile(address);
       
-      if (userProfile.user) {
-        console.log('User profile data:', userProfile.user);
-        setUser(userProfile.user);
+      if (userProfile.data) {
+        console.log('User profile data:', userProfile.data);
+        setUser(userProfile.data);
         
         // Set BIM/OBA balances from database
         const newBalances = {
           ton: 0, // Will try to get this separately
-          bim: parseFloat(userProfile.user.bim_balance || '0'),
-          oba: parseFloat(userProfile.user.oba_balance || '0'),
+          bim: parseFloat(userProfile.data.bim_balance || '0'),
+          oba: parseFloat(userProfile.data.oba_balance || '0'),
           realBimcoin: 0 // Will get from API
         };
         

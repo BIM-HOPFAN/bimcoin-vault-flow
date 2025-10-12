@@ -111,7 +111,7 @@ async function getUserProfile(params: URLSearchParams) {
   // Return first user if array is returned, or null if no user found
   const userData = Array.isArray(user) ? (user.length > 0 ? user[0] : null) : user
 
-  return new Response(JSON.stringify({ user: userData }), {
+  return new Response(JSON.stringify({ success: true, data: userData }), {
     headers: { ...corsHeaders, 'Content-Type': 'application/json' }
   })
 }
@@ -149,7 +149,7 @@ async function registerUser(req: Request, authenticatedWallet: string) {
     .single()
 
   if (existingUser) {
-    return new Response(JSON.stringify({ user: existingUser }), {
+    return new Response(JSON.stringify({ success: true, user: existingUser }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
   }
@@ -183,7 +183,7 @@ async function registerUser(req: Request, authenticatedWallet: string) {
     throw error
   }
 
-  return new Response(JSON.stringify({ user: newUser }), {
+  return new Response(JSON.stringify({ success: true, user: newUser }), {
     status: 201,
     headers: { ...corsHeaders, 'Content-Type': 'application/json' }
   })
@@ -283,7 +283,7 @@ async function getUserStats(params: URLSearchParams) {
     active_mining: !!activeMining
   }
 
-  return new Response(JSON.stringify({ stats }), {
+  return new Response(JSON.stringify({ success: true, data: stats }), {
     headers: { ...corsHeaders, 'Content-Type': 'application/json' }
   })
 }
