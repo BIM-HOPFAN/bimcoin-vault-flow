@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Wallet, TrendingUp, RefreshCw } from 'lucide-react';
+import { Wallet, TrendingUp, RefreshCw, TrendingDown } from 'lucide-react';
 import { useTonAddress } from '@tonconnect/ui-react';
 import { useToast } from '@/hooks/use-toast';
 import { bimCoinAPI } from '@/lib/api';
@@ -23,6 +23,7 @@ const BalanceCard = ({ onBalancesUpdate }: BalanceCardProps) => {
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [tonPrice, setTonPrice] = useState(2.5); // Default to $2.5, will fetch real price
+  const [portfolioChange, setPortfolioChange] = useState<{ percentage: number; isPositive: boolean } | null>(null);
   const address = useTonAddress();
   const { toast } = useToast();
 
@@ -72,6 +73,68 @@ const BalanceCard = ({ onBalancesUpdate }: BalanceCardProps) => {
     }
   };
 
+  // Calculate portfolio value in USD
+  const calculatePortfolioValue = (balanceData: Balances, price: number) => {
+    return (balanceData.ton * price) + 
+           (balanceData.bim * price * 0.005) + 
+           (balanceData.oba * price * 0.005 * 0.005);
+  };
+
+  // Calculate and store portfolio change
+  const updatePortfolioChange = (newBalances: Balances, price: number) => {
+    const currentValue = calculatePortfolioValue(newBalances, price);
+    
+    // Get stored value from 24 hours ago
+    const storageKey = `portfolio_history_${address}`;
+    const stored = localStorage.getItem(storageKey);
+    
+    if (stored) {
+      try {
+        const history = JSON.parse(stored);
+        const now = Date.now();
+        const oneDayAgo = now - (24 * 60 * 60 * 1000);
+        
+        // Find the closest snapshot to 24 hours ago
+        const oldestSnapshot = history
+          .filter((s: any) => s.timestamp <= oneDayAgo)
+          .sort((a: any, b: any) => b.timestamp - a.timestamp)[0];
+        
+        if (oldestSnapshot) {
+          const oldValue = oldestSnapshot.value;
+          const change = ((currentValue - oldValue) / oldValue) * 100;
+          setPortfolioChange({
+            percentage: Math.abs(change),
+            isPositive: change >= 0
+          });
+        } else {
+          // Not enough history yet
+          setPortfolioChange(null);
+        }
+        
+        // Add current snapshot and clean up old data (keep last 7 days)
+        const sevenDaysAgo = now - (7 * 24 * 60 * 60 * 1000);
+        const updatedHistory = [
+          ...history.filter((s: any) => s.timestamp > sevenDaysAgo),
+          { timestamp: now, value: currentValue }
+        ];
+        
+        localStorage.setItem(storageKey, JSON.stringify(updatedHistory));
+      } catch (err) {
+        console.error('Error processing portfolio history:', err);
+        // Initialize new history
+        localStorage.setItem(storageKey, JSON.stringify([
+          { timestamp: Date.now(), value: currentValue }
+        ]));
+      }
+    } else {
+      // Initialize portfolio history
+      localStorage.setItem(storageKey, JSON.stringify([
+        { timestamp: Date.now(), value: currentValue }
+      ]));
+      setPortfolioChange(null);
+    }
+  };
+
   // Fetch balances - always get BIM/OBA from user profile, optionally get TON from API
   const fetchBalances = async () => {
     if (!address) return;
@@ -118,6 +181,9 @@ const BalanceCard = ({ onBalancesUpdate }: BalanceCardProps) => {
         
         setBalances(newBalances);
         console.log('Final balances set:', newBalances);
+        
+        // Calculate and update portfolio change
+        updatePortfolioChange(newBalances, tonPrice);
         
         // Notify parent component of balance changes
         onBalancesUpdate?.({
@@ -256,15 +322,22 @@ const BalanceCard = ({ onBalancesUpdate }: BalanceCardProps) => {
         <div className="border-t border-border/50 pt-4">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm text-muted-foreground">Total Portfolio Value</span>
-            <div className="flex items-center gap-1 text-success text-sm">
-              <TrendingUp className="w-3 h-3" />
-              <span>+12.5%</span>
-            </div>
+            {portfolioChange && (
+              <div className={`flex items-center gap-1 text-sm ${portfolioChange.isPositive ? 'text-success' : 'text-destructive'}`}>
+                <TrendingUp className={`w-3 h-3 ${!portfolioChange.isPositive ? 'rotate-180' : ''}`} />
+                <span>{portfolioChange.isPositive ? '+' : '-'}{portfolioChange.percentage.toFixed(2)}%</span>
+              </div>
+            )}
           </div>
           <div className="text-2xl font-bold">
-            ${address ? formatLargeNumber((balances.ton * tonPrice) + (balances.bim * tonPrice * 0.005) + (balances.oba * tonPrice * 0.005 * 0.005)) : '0.00'}
+            ${address ? formatLargeNumber(calculatePortfolioValue(balances, tonPrice)) : '0.00'}
           </div>
           <div className="text-sm text-muted-foreground">≈ {address ? formatLargeNumber(balances.ton + (balances.bim * 0.005) + (balances.oba * 0.005 * 0.005), 4) : '0.00'} TON</div>
+          {portfolioChange === null && address && (
+            <div className="text-xs text-muted-foreground mt-1">
+              24h change will appear after 24 hours
+            </div>
+          )}
         </div>
 
         <div className="flex gap-2">
