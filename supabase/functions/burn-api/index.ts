@@ -1,6 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { TonClient, WalletContractV4, internal } from 'https://esm.sh/@ton/ton@15.3.1'
+import { TonClient, WalletContractV4, internal, beginCell, Address } from 'https://esm.sh/@ton/ton@15.3.1'
 import { mnemonicToWalletKey } from 'https://esm.sh/@ton/crypto@3.3.0'
 
 const corsHeaders = {
@@ -479,7 +479,6 @@ serve(async (req) => {
       
       let burnType = 'earned_bim'
       let penaltyAmount = 0
-      let finalBurnAmount = burnAmount
       let jettonAmount = burnAmount // 1:1 ratio for jettons
 
       // If burning more than earned BIM, we're burning from deposits (no penalty)
@@ -496,72 +495,144 @@ serve(async (req) => {
           )
         }
 
-        // No penalty applied
         burnType = 'deposit_bim'
-        
         console.log(`Burning deposit BIM without penalty: ${depositBurnAmount} BIM, final jettons: ${jettonAmount}`)
       }
 
       try {
-        // Call jetton minter to mint tokens to user's wallet
-        const mintResponse = await supabase.functions.invoke('jetton-minter', {
-          body: { 
-            action: 'mint', 
-            user_wallet: wallet_address, 
-            bim_amount: jettonAmount 
-          }
+        console.log(`=== Starting BIM to Bimcoin jetton burn process ===`)
+        console.log(`User: ${wallet_address}, Amount: ${burnAmount} BIM, Expected Jettons: ${jettonAmount}`)
+
+        // Initialize TON client and treasury wallet
+        const tonClient = new TonClient({
+          endpoint: 'https://toncenter.com/api/v2/jsonRPC',
+          apiKey: Deno.env.get('TON_CENTER_API_KEY') || ''
         })
 
-        if (mintResponse.error) {
-          throw new Error(`Jetton minting failed: ${mintResponse.error.message}`)
+        const adminMnemonic = Deno.env.get('ADMIN_MNEMONIC')
+        const treasuryAddress = Deno.env.get('TREASURY_ADDRESS')
+        
+        if (!adminMnemonic || !treasuryAddress) {
+          throw new Error('Treasury wallet not configured')
         }
 
-        if (!mintResponse.data?.success) {
-          throw new Error(`Jetton minting failed: ${mintResponse.data?.error || 'Unknown error'}`)
+        const keyPair = await mnemonicToWalletKey(adminMnemonic.split(' '))
+        const treasuryWallet = WalletContractV4.create({ 
+          workchain: 0, 
+          publicKey: keyPair.publicKey 
+        })
+        const treasuryContract = tonClient.open(treasuryWallet)
+
+        // Get jetton wallet address for treasury
+        const jettonMaster = Deno.env.get('MINTER_ADDRESS')
+        if (!jettonMaster) {
+          throw new Error('Jetton minter address not configured')
         }
 
-        const jettonHash = mintResponse.data.transaction_hash || 'pending'
-        console.log(`Jetton minting successful with hash: ${jettonHash}`)
+        // Calculate jetton amount in nanotons (9 decimals)
+        const jettonNano = BigInt(Math.floor(jettonAmount * 1e9))
+        
+        console.log(`Treasury wallet: ${treasuryWallet.address.toString()}`)
+        console.log(`Sending ${jettonAmount} Bimcoin jettons to ${wallet_address}`)
 
-        // Record burn with jetton details
+        // Build jetton transfer message
+        const seqno = await treasuryContract.getSeqno()
+        
+        // Build jetton transfer body
+        const jettonTransferBody = beginCell()
+          .storeUint(0xf8a7ea5, 32) // op::transfer
+          .storeUint(0, 64) // query_id
+          .storeCoins(jettonNano) // jetton_amount
+          .storeAddress(Address.parse(wallet_address)) // destination
+          .storeAddress(Address.parse(wallet_address)) // response_destination
+          .storeBit(0) // no custom_payload
+          .storeCoins(1) // forward_ton_amount
+          .storeBit(0) // no forward_payload
+          .endCell()
+        
+        // Send jetton transfer message
+        await treasuryContract.sendTransfer({
+          seqno,
+          secretKey: keyPair.secretKey,
+          messages: [
+            internal({
+              value: '50000000', // 0.05 TON for fees
+              to: treasuryAddress, // Send to our own jetton wallet address
+              body: jettonTransferBody
+            })
+          ]
+        })
+
+        // Wait for transaction confirmation
+        let currentSeqno = seqno
+        let attempts = 0
+        while (currentSeqno === seqno && attempts < 30) {
+          await new Promise(resolve => setTimeout(resolve, 2000))
+          currentSeqno = await treasuryContract.getSeqno()
+          attempts++
+        }
+
+        if (currentSeqno === seqno) {
+          throw new Error('Jetton transfer not confirmed after 60 seconds')
+        }
+
+        const jetton_payout_hash = `${seqno}_jetton_confirmed`
+        console.log(`Jetton payout successful: ${jetton_payout_hash}`)
+
+        // Record the burn transaction - trigger will handle balance updates
         const { data: burnRecord, error: burnError } = await supabase
           .from('burns')
           .insert({
             user_id: user.id,
             bim_amount: burnAmount,
             ton_amount: 0, // No TON for jetton burns
-            jetton_burn_hash: jettonHash,
-            payout_processed: true, // Mark as processed since jettons are minted
+            jetton_burn_hash: jetton_payout_hash,
+            payout_processed: true,
             penalty_amount: penaltyAmount,
-            burn_type: burnType
+            burn_type: burnType,
+            processed_at: new Date().toISOString()
           })
           .select()
           .single()
 
-        if (burnError) throw burnError
+        if (burnError) {
+          console.error('Burn record error:', burnError)
+          console.error('CRITICAL: Jettons sent but failed to record transaction in database')
+        }
 
-        console.log(`Burn record created successfully for user ${user.id}`)
+        console.log(`BIM burn successful: ${burnAmount} BIM → ${jettonAmount} Bimcoin for user ${wallet_address}`)
 
         return new Response(
           JSON.stringify({
             success: true,
-            message: 'BIM burned and Bimcoin jettons minted successfully',
+            burn_id: burnRecord?.id || 'unknown',
             bim_burned: burnAmount,
             jettons_received: jettonAmount,
-            penalty_applied: penaltyAmount,
+            penalty_amount: penaltyAmount,
             burn_type: burnType,
-            jetton_hash: jettonHash
+            jetton_hash: jetton_payout_hash,
+            new_bim_balance: parseFloat(user.bim_balance) - burnAmount
           }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
 
       } catch (error) {
-        console.error('Jetton burn error:', error)
+        console.error('Jetton burn transaction error:', error)
+        
         const errorObj = error as Error
+        let errorMessage = 'Failed to process jetton burn transaction'
+        if (errorObj.message?.includes('Treasury wallet not configured')) {
+          errorMessage = 'Treasury wallet not configured'
+        } else if (errorObj.message?.includes('Jetton minter address not configured')) {
+          errorMessage = 'Jetton minter address not configured'
+        } else if (errorObj.message?.includes('not confirmed')) {
+          errorMessage = 'Jetton transfer failed - your BIM was not deducted'
+        }
+
         return new Response(
           JSON.stringify({ 
             success: false, 
-            error: 'Failed to mint jettons', 
+            error: errorMessage,
             details: errorObj.message 
           }),
           { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
