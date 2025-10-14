@@ -25,11 +25,11 @@ export const BIMBurnCard: React.FC<BIMBurnCardProps> = ({
   const address = useTonAddress();
   const { toast } = useToast();
 
-  const handleBurnBIM = async () => {
+  const handleWithdraw = async () => {
     if (!address) {
       toast({
         title: "Wallet not connected",
-        description: "Please connect your TON wallet to burn BIM",
+        description: "Please connect your TON wallet to withdraw",
         variant: "destructive",
       });
       return;
@@ -39,7 +39,7 @@ export const BIMBurnCard: React.FC<BIMBurnCardProps> = ({
     if (!amount || amount <= 0) {
       toast({
         title: "Invalid amount",
-        description: "Please enter a valid BIM amount to burn",
+        description: "Please enter a valid BIM amount to withdraw",
         variant: "destructive",
       });
       return;
@@ -56,32 +56,39 @@ export const BIMBurnCard: React.FC<BIMBurnCardProps> = ({
 
     setLoading(true);
     try {
-      const result = await bimCoinAPI.burnBIM(address, amount, payoutType);
+      const { withdrawalAPI } = await import('@/lib/withdrawalAPI');
+      const result = payoutType === 'ton' 
+        ? await withdrawalAPI.withdrawTON(address, amount)
+        : await withdrawalAPI.withdrawJetton(address, amount);
       
       if (result.success) {
         const payoutDescription = payoutType === 'ton' 
-          ? `${result.ton_received} TON` 
-          : `${result.jettons_received} Bimcoin jettons`;
+          ? `${result.ton_received || 0} TON` 
+          : `${result.jetton_received || 0} Bimcoin`;
+
+        const penaltyNote = result.penalty_amount && result.penalty_amount > 0
+          ? ` (${result.penalty_amount} BIM penalty applied)`
+          : '';
         
         toast({
-          title: "BIM burned successfully!",
-          description: `Burned ${result.bim_burned} BIM and received ${payoutDescription}`,
+          title: "Withdrawal successful!",
+          description: `Withdrew ${result.bim_withdrawn} BIM and received ${payoutDescription}${penaltyNote}`,
           variant: "default",
         });
         setBurnAmount('');
         onBalanceUpdate?.();
       } else {
         toast({
-          title: "Burn failed",
-          description: result.error || "Failed to burn BIM tokens",
+          title: "Withdrawal failed",
+          description: result.error || "Failed to process withdrawal",
           variant: "destructive",
         });
       }
     } catch (error) {
-      console.error('Burn BIM error:', error);
+      console.error('Withdrawal error:', error);
       toast({
         title: "Error",
-        description: "An error occurred while burning BIM tokens",
+        description: error instanceof Error ? error.message : "An error occurred during withdrawal",
         variant: "destructive",
       });
     } finally {
@@ -93,23 +100,19 @@ export const BIMBurnCard: React.FC<BIMBurnCardProps> = ({
     setBurnAmount(bimBalance.toString());
   };
 
-  // Get burn preview when amount changes
-  const getBurnPreview = async (amount: string) => {
+  // Get withdrawal preview when amount changes
+  const getWithdrawalPreview = async (amount: string) => {
     if (!address || !amount || parseFloat(amount) <= 0) {
       setBurnPreview(null);
       return;
     }
 
     try {
-      const preview = await bimCoinAPI.getBurnPreview(address, parseFloat(amount));
-      if (preview.success && preview.preview) {
-        setBurnPreview(preview.preview);
-      } else {
-        console.warn('Invalid preview response:', preview);
-        setBurnPreview(null);
-      }
+      const { withdrawalAPI } = await import('@/lib/withdrawalAPI');
+      const preview = await withdrawalAPI.previewWithdrawal(address, parseFloat(amount), payoutType);
+      setBurnPreview(preview);
     } catch (error) {
-      console.error('Failed to get burn preview:', error);
+      console.error('Failed to get withdrawal preview:', error);
       setBurnPreview(null);
     }
   };
@@ -117,11 +120,11 @@ export const BIMBurnCard: React.FC<BIMBurnCardProps> = ({
   // Debounced preview update
   useEffect(() => {
     const timer = setTimeout(() => {
-      getBurnPreview(burnAmount);
+      getWithdrawalPreview(burnAmount);
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [burnAmount, address]);
+  }, [burnAmount, address, payoutType]);
 
   const tonReceived = parseFloat(burnAmount) * 0.005 || 0;
 
@@ -129,11 +132,11 @@ export const BIMBurnCard: React.FC<BIMBurnCardProps> = ({
     <Card className="enhanced-card">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Flame className="w-5 h-5 text-orange-500" />
-          Burn BIM
+          <Coins className="w-5 h-5 text-primary" />
+          Withdraw BIM
         </CardTitle>
         <CardDescription>
-          Burn your BIM tokens to receive TON or Bimcoin jettons
+          Withdraw your BIM tokens to receive TON or Bimcoin jettons automatically
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -159,8 +162,8 @@ export const BIMBurnCard: React.FC<BIMBurnCardProps> = ({
             </div>
           </TabsContent>
         </Tabs>
-        <div className="space-y-2">
-          <Label htmlFor="burn-amount">BIM Amount to Burn</Label>
+          <div className="space-y-2">
+          <Label htmlFor="burn-amount">BIM Amount to Withdraw</Label>
           <div className="flex gap-2">
             <Input
               id="burn-amount"
@@ -220,7 +223,7 @@ export const BIMBurnCard: React.FC<BIMBurnCardProps> = ({
         )}
 
         <Button
-          onClick={handleBurnBIM}
+          onClick={handleWithdraw}
           disabled={loading || !burnAmount || parseFloat(burnAmount) <= 0}
           className="w-full"
           size="lg"
@@ -228,21 +231,12 @@ export const BIMBurnCard: React.FC<BIMBurnCardProps> = ({
           {loading ? (
             <>
               <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
-              Burning BIM...
+              Processing Withdrawal...
             </>
           ) : (
             <>
-              {payoutType === 'ton' ? (
-                <>
-                  <Flame className="w-4 h-4 mr-2" />
-                  Burn BIM for TON
-                </>
-              ) : (
-                <>
-                  <Coins className="w-4 h-4 mr-2" />
-                  Burn BIM for Bimcoin
-                </>
-              )}
+              <Coins className="w-4 h-4 mr-2" />
+              {payoutType === 'ton' ? 'Withdraw BIM for TON' : 'Withdraw BIM for Bimcoin'}
             </>
           )}
         </Button>
