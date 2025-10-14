@@ -77,6 +77,7 @@ const BalanceCard = ({ onBalancesUpdate }: BalanceCardProps) => {
   const calculatePortfolioValue = (balanceData: Balances, price: number) => {
     return (balanceData.ton * price) + 
            (balanceData.bim * price * 0.005) + 
+           (balanceData.realBimcoin * price * 0.005) +
            (balanceData.oba * price * 0.005 * 0.005);
   };
 
