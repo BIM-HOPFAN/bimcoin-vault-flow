@@ -21,19 +21,38 @@ serve(async (req) => {
   }
 
   try {
+    // Get authorization token
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: 'Authorization header required' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
+    console.log('Withdrawal API called');
+
     const url = new URL(req.url);
     const path = url.pathname.replace('/withdrawal-api', '');
+    
+    console.log('Request path:', path, 'Method:', req.method);
 
     // Withdraw TON
     if (path === '/withdraw-ton' && req.method === 'POST') {
-      const { wallet_address, bim_amount } = await req.json();
+      console.log('Processing TON withdrawal request');
+      
+      const body = await req.json();
+      console.log('Request body:', JSON.stringify(body));
+      
+      const { wallet_address, bim_amount } = body;
 
       if (!wallet_address || !bim_amount) {
+        console.log('Missing required fields:', { wallet_address, bim_amount });
         return new Response(
           JSON.stringify({ error: 'Missing required fields' }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -42,8 +61,11 @@ serve(async (req) => {
 
       const bimAmountNum = parseFloat(bim_amount);
       const tonAmount = bimAmountNum * BIM_TO_TON_RATE;
+      
+      console.log('Calculated amounts:', { bimAmountNum, tonAmount, minRequired: MIN_TON_WITHDRAWAL });
 
       if (tonAmount < MIN_TON_WITHDRAWAL) {
+        console.log('Amount below minimum');
         return new Response(
           JSON.stringify({ error: `Minimum withdrawal is ${MIN_TON_WITHDRAWAL} TON (${MIN_TON_WITHDRAWAL / BIM_TO_TON_RATE} BIM)` }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -51,6 +73,7 @@ serve(async (req) => {
       }
 
       // Get user and check balance
+      console.log('Fetching user data for wallet:', wallet_address);
       const { data: userData, error: userError } = await supabase
         .from('users')
         .select('id, wallet_address, bim_balance, deposit_bim_balance, earned_bim_balance')
@@ -58,13 +81,17 @@ serve(async (req) => {
         .single();
 
       if (userError || !userData) {
+        console.error('User not found:', userError);
         return new Response(
           JSON.stringify({ error: 'User not found' }),
           { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
+      
+      console.log('User data:', { id: userData.id, bim_balance: userData.bim_balance });
 
       if (userData.bim_balance < bimAmountNum) {
+        console.log('Insufficient balance:', { required: bimAmountNum, available: userData.bim_balance });
         return new Response(
           JSON.stringify({ 
             error: 'Insufficient BIM balance',
@@ -410,8 +437,13 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('Error in withdrawal-api:', error);
+    console.error('Error stack:', error.stack);
+    console.error('Error message:', error.message);
     return new Response(
-      JSON.stringify({ error: 'Internal server error' }),
+      JSON.stringify({ 
+        error: 'Internal server error',
+        details: error.message 
+      }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
