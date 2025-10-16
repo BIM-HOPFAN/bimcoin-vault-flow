@@ -1,6 +1,42 @@
 # Bimcoin Wallet - Multi-Platform Deployment Guide
 
-This guide covers deploying your Bimcoin wallet to Telegram Mini App, Google Play Store, and Apple App Store.
+This guide covers deploying your Bimcoin wallet to PWA (installable web app), Telegram Mini App, Google Play Store, and Apple App Store.
+
+## 📱 Platform 0: Progressive Web App (PWA) - EASIEST & FASTEST
+
+### What is PWA?
+Your app is now a PWA, which means users can install it directly from their browser to their home screen like a native app, without going through app stores.
+
+### Features
+✅ Works offline with cached data
+✅ Install from browser (no app store needed)
+✅ Works on ALL devices (iPhone, Android, Desktop)
+✅ Automatic updates when you publish changes
+✅ Fast loading with service worker caching
+✅ Looks and feels like a native app
+✅ Push notifications support (can be added)
+
+### How Users Install
+
+#### On Mobile (iOS/Android):
+1. Visit https://bimlight.org in Safari (iOS) or Chrome (Android)
+2. Tap the Share/Menu button
+3. Select "Add to Home Screen"
+4. App appears on home screen like a native app
+
+#### On Desktop:
+1. Visit https://bimlight.org in Chrome, Edge, or other supported browsers
+2. Look for the install icon (⊕) in the address bar
+3. Click "Install"
+4. App opens in its own window
+
+### No Submission Required
+- No app store review process
+- No waiting period
+- No annual fees
+- Instant updates to all users
+
+---
 
 ## 🚀 Platform 1: Telegram Mini App
 
@@ -197,18 +233,21 @@ server: {
 
 ## 🎯 Quick Comparison
 
-| Feature | Telegram Mini App | Play Store | App Store |
-|---------|------------------|------------|-----------|
-| Setup Time | 10 minutes | 2-3 days | 2-3 days |
-| Cost | Free | $25 one-time | $99/year |
-| Review Process | None | 1-7 days | 1-3 days |
-| Updates | Instant | Hours | 1-3 days |
-| TON Integration | Native | Full | Full |
-| Distribution | Bot link | Play Store | App Store |
+| Feature | PWA | Telegram Mini App | Play Store | App Store |
+|---------|-----|------------------|------------|-----------|
+| Setup Time | Ready now! | 10 minutes | 2-3 days | 2-3 days |
+| Cost | Free | Free | $25 one-time | $99/year |
+| Review Process | None | None | 1-7 days | 1-3 days |
+| Updates | Instant | Instant | Hours | 1-3 days |
+| TON Integration | Full | Native | Full | Full |
+| Distribution | Direct URL | Bot link | Play Store | App Store |
+| Works Offline | ✅ Yes | Limited | ✅ Yes | ✅ Yes |
+| Installation | Browser | In Telegram | App Store | App Store |
 
 ## 📞 Support
 
-- Telegram: Best for quick deployment and testing
-- Native Apps: Best for official store presence and advanced features
+- **PWA**: Already live! Just share your URL
+- **Telegram**: Best for quick deployment and testing
+- **Native Apps**: Best for official store presence and advanced features
 
 Need help? Check the [Capacitor Documentation](https://capacitorjs.com/docs) or [Telegram Bot API](https://core.telegram.org/bots/webapps).
