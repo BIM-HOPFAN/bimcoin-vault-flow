@@ -7,9 +7,11 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Edit, Trash2, Save, X } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Plus, Edit, Trash2, Save, X, CheckCircle, XCircle, Clock, Coins } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { bimCoinAPI } from '@/lib/api';
+import { supabase } from '@/integrations/supabase/client';
 
 interface Task {
   id?: string;
@@ -26,9 +28,11 @@ interface Task {
 
 const Admin = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [withdrawals, setWithdrawals] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [activeTab, setActiveTab] = useState('tasks');
   const { toast } = useToast();
 
   const [formData, setFormData] = useState<Task>({
@@ -61,6 +65,7 @@ const Admin = () => {
 
   useEffect(() => {
     fetchTasks();
+    fetchWithdrawals();
   }, []);
 
   const fetchTasks = async () => {
@@ -79,6 +84,117 @@ const Admin = () => {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchWithdrawals = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('withdrawals')
+        .select('*, users(wallet_address)')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setWithdrawals(data || []);
+    } catch (error) {
+      console.error('Failed to fetch withdrawals:', error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch withdrawal requests",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const approveWithdrawal = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('withdrawals')
+        .update({ 
+          status: 'approved',
+          approved_at: new Date().toISOString()
+        })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "Withdrawal approved. Process the blockchain transaction next.",
+      });
+      
+      fetchWithdrawals();
+    } catch (error) {
+      console.error('Failed to approve withdrawal:', error);
+      toast({
+        title: "Error",
+        description: "Failed to approve withdrawal",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const rejectWithdrawal = async (id: string) => {
+    const reason = prompt('Rejection reason:');
+    if (!reason) return;
+
+    try {
+      const { error } = await supabase
+        .from('withdrawals')
+        .update({ 
+          status: 'rejected',
+          rejected_at: new Date().toISOString(),
+          rejection_reason: reason
+        })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "Withdrawal request rejected",
+      });
+      
+      fetchWithdrawals();
+    } catch (error) {
+      console.error('Failed to reject withdrawal:', error);
+      toast({
+        title: "Error",
+        description: "Failed to reject withdrawal",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const completeWithdrawal = async (id: string) => {
+    const txHash = prompt('Enter transaction hash:');
+    if (!txHash) return;
+
+    try {
+      const { error } = await supabase
+        .from('withdrawals')
+        .update({ 
+          status: 'completed',
+          completed_at: new Date().toISOString(),
+          tx_hash: txHash
+        })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "Withdrawal marked as completed",
+      });
+      
+      fetchWithdrawals();
+    } catch (error) {
+      console.error('Failed to complete withdrawal:', error);
+      toast({
+        title: "Error",
+        description: "Failed to complete withdrawal",
+        variant: "destructive",
+      });
     }
   };
 
@@ -165,24 +281,56 @@ const Admin = () => {
     }
   };
 
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return <Badge variant="secondary"><Clock className="w-3 h-3 mr-1" />Pending</Badge>;
+      case 'approved':
+        return <Badge className="bg-blue-500/20 text-blue-400"><Clock className="w-3 h-3 mr-1" />Approved</Badge>;
+      case 'completed':
+        return <Badge className="bg-green-500/20 text-green-400"><CheckCircle className="w-3 h-3 mr-1" />Completed</Badge>;
+      case 'rejected':
+        return <Badge variant="destructive"><XCircle className="w-3 h-3 mr-1" />Rejected</Badge>;
+      default:
+        return <Badge variant="secondary">{status}</Badge>;
+    }
+  };
+
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold">Task Administration</h1>
-          <p className="text-muted-foreground">Manage daily tasks and rewards</p>
+          <h1 className="text-3xl font-bold">Administration Panel</h1>
+          <p className="text-muted-foreground">Manage tasks and withdrawal requests</p>
         </div>
-        <Button 
-          onClick={() => setShowForm(true)}
-          className="bg-gradient-primary hover:opacity-90"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          New Task
-        </Button>
       </div>
 
-      {/* Task Form */}
-      {showForm && (
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList>
+          <TabsTrigger value="tasks">Tasks</TabsTrigger>
+          <TabsTrigger value="withdrawals">
+            Withdrawals
+            {withdrawals.filter(w => w.status === 'pending').length > 0 && (
+              <Badge className="ml-2" variant="destructive">
+                {withdrawals.filter(w => w.status === 'pending').length}
+              </Badge>
+            )}
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="tasks" className="space-y-6">
+          <div className="flex justify-end">
+            <Button 
+              onClick={() => setShowForm(true)}
+              className="bg-gradient-primary hover:opacity-90"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              New Task
+            </Button>
+          </div>
+
+          {/* Task Form */}
+          {showForm && (
         <Card className="enhanced-card">
           <CardHeader>
             <CardTitle>{editingTask ? 'Edit Task' : 'Create New Task'}</CardTitle>
@@ -307,10 +455,10 @@ const Admin = () => {
             </form>
           </CardContent>
         </Card>
-      )}
+          )}
 
-      {/* Tasks List */}
-      <Card className="enhanced-card">
+          {/* Tasks List */}
+          <Card className="enhanced-card">
         <CardHeader>
           <CardTitle>Existing Tasks</CardTitle>
           <CardDescription>
@@ -369,7 +517,108 @@ const Admin = () => {
             </div>
           )}
         </CardContent>
-      </Card>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="withdrawals" className="space-y-6">
+          <Card className="enhanced-card">
+            <CardHeader>
+              <CardTitle>Withdrawal Requests</CardTitle>
+              <CardDescription>
+                Review and process user withdrawal requests
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {withdrawals.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  No withdrawal requests
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {withdrawals.map((withdrawal) => (
+                    <div 
+                      key={withdrawal.id}
+                      className="flex flex-col gap-4 p-4 rounded-lg bg-muted/30 border border-border/50"
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="space-y-2 flex-1">
+                          <div className="flex items-center gap-2">
+                            <Coins className="w-4 h-4 text-primary" />
+                            <span className="font-medium">
+                              {withdrawal.bim_amount} BIM → {' '}
+                              {withdrawal.withdrawal_type === 'ton' 
+                                ? `${withdrawal.ton_amount} TON`
+                                : `${withdrawal.jetton_amount} Bimcoin`
+                              }
+                            </span>
+                            {getStatusBadge(withdrawal.status)}
+                          </div>
+                          <div className="text-sm text-muted-foreground space-y-1">
+                            <div>Wallet: {withdrawal.wallet_address}</div>
+                            <div>Total deducted: {withdrawal.total_bim_deducted} BIM</div>
+                            {withdrawal.penalty_amount > 0 && (
+                              <div className="text-warning">
+                                Penalty: {withdrawal.penalty_amount} BIM
+                              </div>
+                            )}
+                            <div>
+                              Requested: {new Date(withdrawal.created_at).toLocaleString()}
+                            </div>
+                            {withdrawal.tx_hash && (
+                              <div className="text-primary">TX: {withdrawal.tx_hash}</div>
+                            )}
+                            {withdrawal.rejection_reason && (
+                              <div className="text-destructive">
+                                Reason: {withdrawal.rejection_reason}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center gap-2">
+                          {withdrawal.status === 'pending' && (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-green-400 hover:text-green-300"
+                                onClick={() => approveWithdrawal(withdrawal.id)}
+                              >
+                                <CheckCircle className="w-4 h-4 mr-1" />
+                                Approve
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-destructive hover:text-destructive"
+                                onClick={() => rejectWithdrawal(withdrawal.id)}
+                              >
+                                <XCircle className="w-4 h-4 mr-1" />
+                                Reject
+                              </Button>
+                            </>
+                          )}
+                          {withdrawal.status === 'approved' && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-primary hover:text-primary"
+                              onClick={() => completeWithdrawal(withdrawal.id)}
+                            >
+                              <CheckCircle className="w-4 h-4 mr-1" />
+                              Mark Complete
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };

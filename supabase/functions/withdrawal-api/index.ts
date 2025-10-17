@@ -42,17 +42,14 @@ serve(async (req) => {
     
     console.log('Request path:', path, 'Method:', req.method);
 
-    // Withdraw TON
+    // Submit withdrawal request (TON)
     if (path === '/withdraw-ton' && req.method === 'POST') {
       console.log('Processing TON withdrawal request');
       
       const body = await req.json();
-      console.log('Request body:', JSON.stringify(body));
-      
       const { wallet_address, bim_amount } = body;
 
       if (!wallet_address || !bim_amount) {
-        console.log('Missing required fields:', { wallet_address, bim_amount });
         return new Response(
           JSON.stringify({ error: 'Missing required fields' }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -61,11 +58,8 @@ serve(async (req) => {
 
       const bimAmountNum = parseFloat(bim_amount);
       const tonAmount = bimAmountNum * BIM_TO_TON_RATE;
-      
-      console.log('Calculated amounts:', { bimAmountNum, tonAmount, minRequired: MIN_TON_WITHDRAWAL });
 
       if (tonAmount < MIN_TON_WITHDRAWAL) {
-        console.log('Amount below minimum');
         return new Response(
           JSON.stringify({ error: `Minimum withdrawal is ${MIN_TON_WITHDRAWAL} TON (${MIN_TON_WITHDRAWAL / BIM_TO_TON_RATE} BIM)` }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -73,202 +67,90 @@ serve(async (req) => {
       }
 
       // Get user and check balance
-      console.log('Fetching user data for wallet:', wallet_address);
       const { data: userData, error: userError } = await supabase
         .from('users')
-        .select('id, wallet_address, bim_balance, deposit_bim_balance, earned_bim_balance')
+        .select('id, bim_balance, deposit_bim_balance, earned_bim_balance')
         .eq('wallet_address', wallet_address)
         .single();
 
       if (userError || !userData) {
-        console.error('User not found:', userError);
         return new Response(
           JSON.stringify({ error: 'User not found' }),
           { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
-      
-      console.log('User data:', { id: userData.id, bim_balance: userData.bim_balance });
 
       if (userData.bim_balance < bimAmountNum) {
-        console.log('Insufficient balance:', { required: bimAmountNum, available: userData.bim_balance });
         return new Response(
-          JSON.stringify({ 
-            error: 'Insufficient BIM balance',
-            required: bimAmountNum,
-            available: userData.bim_balance
-          }),
+          JSON.stringify({ error: 'Insufficient BIM balance' }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
 
-      // Determine burn type and calculate any penalties
+      // Calculate penalty if needed
       let burnType = 'earned_bim';
       let penaltyAmount = 0;
-      let bimToDeduct = bimAmountNum;
+      let totalDeducted = bimAmountNum;
 
       if (bimAmountNum > userData.earned_bim_balance) {
-        // Need to use deposit BIM
         const depositBimNeeded = bimAmountNum - userData.earned_bim_balance;
         burnType = 'mixed';
         
-        // Check if there's deposit BIM available
         const activeDepositBim = await calculateActiveDepositBim(supabase, userData.id);
         
         if (depositBimNeeded > activeDepositBim) {
-          // Calculate penalty for using expired deposit BIM
-          penaltyAmount = (depositBimNeeded - activeDepositBim) * 0.5; // 50% penalty
-          bimToDeduct = bimAmountNum + penaltyAmount;
+          penaltyAmount = (depositBimNeeded - activeDepositBim) * 0.5;
+          totalDeducted = bimAmountNum + penaltyAmount;
           
-          if (userData.bim_balance < bimToDeduct) {
+          if (userData.bim_balance < totalDeducted) {
             return new Response(
-              JSON.stringify({ 
-                error: 'Insufficient BIM balance after penalty',
-                required: bimToDeduct,
-                available: userData.bim_balance,
-                penalty: penaltyAmount
-              }),
+              JSON.stringify({ error: 'Insufficient BIM balance after penalty' }),
               { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             );
           }
         }
       }
 
-      // Initialize TON client and treasury wallet
-      const tonClient = new TonClient({
-        endpoint: 'https://toncenter.com/api/v2/jsonRPC',
-        apiKey: Deno.env.get('TON_CENTER_API_KEY') || ''
-      });
-
-      const mnemonic = Deno.env.get('ADMIN_MNEMONIC')?.split(' ') || [];
-      const key = await mnemonicToWalletKey(mnemonic);
-      const treasuryAddress = Address.parse(Deno.env.get('TREASURY_ADDRESS') || '');
-      const treasuryWallet = WalletContractV4.create({ publicKey: key.publicKey, workchain: 0 });
-      const treasuryContract = tonClient.open(treasuryWallet);
-
-      // Check treasury balance
-      const treasuryBalance = await treasuryContract.getBalance();
-      const requiredBalance = toNano(tonAmount.toString()) + toNano(TRANSACTION_FEE.toString());
-
-      if (treasuryBalance < requiredBalance) {
-        console.error('Insufficient treasury balance:', {
-          required: requiredBalance.toString(),
-          available: treasuryBalance.toString()
-        });
-        
-        return new Response(
-          JSON.stringify({ error: 'Treasury balance insufficient. Please try again later.' }),
-          { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-
-      // Create withdrawal record
-      const { data: withdrawalData, error: withdrawalError } = await supabase
-        .from('burns')
+      // Create withdrawal request
+      const { data: withdrawal, error: withdrawalError } = await supabase
+        .from('withdrawals')
         .insert({
           user_id: userData.id,
+          wallet_address,
           bim_amount: bimAmountNum,
+          withdrawal_type: 'ton',
           ton_amount: tonAmount,
-          burn_type: burnType,
           penalty_amount: penaltyAmount,
-          payout_processed: false,
-          jetton_burn_hash: `withdrawal_${Date.now()}`
+          total_bim_deducted: totalDeducted,
+          status: 'pending'
         })
         .select()
         .single();
 
       if (withdrawalError) {
-        console.error('Error creating withdrawal record:', withdrawalError);
+        console.error('Error creating withdrawal request:', withdrawalError);
         return new Response(
-          JSON.stringify({ error: 'Failed to create withdrawal record' }),
+          JSON.stringify({ error: 'Failed to create withdrawal request' }),
           { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
 
-      // Send TON transaction
-      try {
-        const seqno = await treasuryContract.getSeqno();
-        
-        await treasuryContract.sendTransfer({
-          secretKey: key.secretKey,
-          seqno: seqno,
-          messages: [
-            internal({
-              to: wallet_address,
-              value: toNano(tonAmount.toString()),
-              bounce: false,
-              body: beginCell()
-                .storeUint(0, 32)
-                .storeStringTail(`BIM Withdrawal: ${bimAmountNum} BIM -> ${tonAmount} TON`)
-                .endCell()
-            })
-          ]
-        });
-
-        // Wait for transaction confirmation (simple delay)
-        await new Promise(resolve => setTimeout(resolve, 5000));
-
-        // Update balances
-        const newBimBalance = userData.bim_balance - bimToDeduct;
-        const newEarnedBim = Math.max(0, userData.earned_bim_balance - bimAmountNum);
-        const depositBimUsed = Math.max(0, bimAmountNum - userData.earned_bim_balance);
-        const newDepositBim = userData.deposit_bim_balance - depositBimUsed;
-
-        await supabase
-          .from('users')
-          .update({
-            bim_balance: newBimBalance,
-            earned_bim_balance: newEarnedBim,
-            deposit_bim_balance: Math.max(0, newDepositBim)
-          })
-          .eq('id', userData.id);
-
-        // Mark withdrawal as processed
-        await supabase
-          .from('burns')
-          .update({
-            payout_processed: true,
-            processed_at: new Date().toISOString(),
-            ton_payout_hash: `ton_transfer_${Date.now()}`
-          })
-          .eq('id', withdrawalData.id);
-
-        console.log('TON withdrawal successful:', {
-          userId: userData.id,
-          bimAmount: bimAmountNum,
-          tonAmount,
-          penaltyAmount
-        });
-
-        return new Response(
-          JSON.stringify({
-            success: true,
-            bim_withdrawn: bimToDeduct,
-            ton_received: tonAmount,
-            penalty_amount: penaltyAmount,
-            burn_type: burnType,
-            withdrawal_id: withdrawalData.id
-          }),
-          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-
-      } catch (txError) {
-        console.error('Transaction failed:', txError);
-        
-        // Delete the withdrawal record on failure
-        await supabase
-          .from('burns')
-          .delete()
-          .eq('id', withdrawalData.id);
-
-        return new Response(
-          JSON.stringify({ error: 'Transaction failed. Please try again.' }),
-          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
+      return new Response(
+        JSON.stringify({
+          success: true,
+          withdrawal_id: withdrawal.id,
+          bim_amount: bimAmountNum,
+          ton_amount: tonAmount,
+          penalty_amount: penaltyAmount,
+          total_bim_deducted: totalDeducted,
+          status: 'pending',
+          message: 'Withdrawal request submitted successfully. Awaiting admin approval.'
+        }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
-    // Withdraw Bimcoin jettons
+    // Submit withdrawal request (Jetton)
     if (path === '/withdraw-jetton' && req.method === 'POST') {
       const { wallet_address, bim_amount } = await req.json();
 
@@ -292,7 +174,7 @@ serve(async (req) => {
       // Get user and check balance
       const { data: userData, error: userError } = await supabase
         .from('users')
-        .select('id, wallet_address, bim_balance, deposit_bim_balance, earned_bim_balance')
+        .select('id, bim_balance, deposit_bim_balance, earned_bim_balance')
         .eq('wallet_address', wallet_address)
         .single();
 
@@ -305,80 +187,89 @@ serve(async (req) => {
 
       if (userData.bim_balance < bimAmountNum) {
         return new Response(
-          JSON.stringify({ 
-            error: 'Insufficient BIM balance',
-            required: bimAmountNum,
-            available: userData.bim_balance
-          }),
+          JSON.stringify({ error: 'Insufficient BIM balance' }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
 
-      // Determine burn type
-      let burnType = 'earned_bim';
-      if (bimAmountNum > userData.earned_bim_balance) {
-        burnType = 'mixed';
-      }
+      // Create withdrawal request
+      const { data: withdrawal, error: withdrawalError } = await supabase
+        .from('withdrawals')
+        .insert({
+          user_id: userData.id,
+          wallet_address,
+          bim_amount: bimAmountNum,
+          withdrawal_type: 'jetton',
+          jetton_amount: jettonAmount,
+          penalty_amount: 0,
+          total_bim_deducted: bimAmountNum,
+          status: 'pending'
+        })
+        .select()
+        .single();
 
-      // Send jettons (call jetton-minter function)
-      const { data: jettonResult, error: jettonError } = await supabase.functions.invoke('jetton-minter', {
-        body: {
-          action: 'transfer',
-          recipient: wallet_address,
-          amount: jettonAmount.toString()
-        }
-      });
-
-      if (jettonError || !jettonResult?.success) {
-        console.error('Jetton transfer failed:', jettonError);
+      if (withdrawalError) {
+        console.error('Error creating withdrawal request:', withdrawalError);
         return new Response(
-          JSON.stringify({ error: 'Jetton transfer failed. Please try again.' }),
+          JSON.stringify({ error: 'Failed to create withdrawal request' }),
           { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
 
-      // Update balances
-      const newBimBalance = userData.bim_balance - bimAmountNum;
-      const newEarnedBim = Math.max(0, userData.earned_bim_balance - bimAmountNum);
-      const depositBimUsed = Math.max(0, bimAmountNum - userData.earned_bim_balance);
-      const newDepositBim = userData.deposit_bim_balance - depositBimUsed;
-
-      await supabase
-        .from('users')
-        .update({
-          bim_balance: newBimBalance,
-          earned_bim_balance: newEarnedBim,
-          deposit_bim_balance: Math.max(0, newDepositBim)
-        })
-        .eq('id', userData.id);
-
-      // Create withdrawal record
-      await supabase
-        .from('burns')
-        .insert({
-          user_id: userData.id,
-          bim_amount: bimAmountNum,
-          ton_amount: jettonAmount, // Store jetton amount in ton_amount field
-          burn_type: burnType,
-          payout_processed: true,
-          processed_at: new Date().toISOString(),
-          jetton_burn_hash: jettonResult.txHash || `jetton_${Date.now()}`
-        });
-
-      console.log('Jetton withdrawal successful:', {
-        userId: userData.id,
-        bimAmount: bimAmountNum,
-        jettonAmount
-      });
-
       return new Response(
         JSON.stringify({
           success: true,
-          bim_withdrawn: bimAmountNum,
-          jetton_received: jettonAmount,
-          burn_type: burnType,
-          tx_hash: jettonResult.txHash
+          withdrawal_id: withdrawal.id,
+          bim_amount: bimAmountNum,
+          jetton_amount: jettonAmount,
+          status: 'pending',
+          message: 'Withdrawal request submitted successfully. Awaiting admin approval.'
         }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Get user's withdrawal requests
+    if (path === '/my-withdrawals' && req.method === 'GET') {
+      const url = new URL(req.url);
+      const wallet = url.searchParams.get('wallet_address');
+
+      if (!wallet) {
+        return new Response(
+          JSON.stringify({ error: 'Wallet address required' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const { data: userData } = await supabase
+        .from('users')
+        .select('id')
+        .eq('wallet_address', wallet)
+        .single();
+
+      if (!userData) {
+        return new Response(
+          JSON.stringify({ error: 'User not found' }),
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const { data: withdrawals, error } = await supabase
+        .from('withdrawals')
+        .select('*')
+        .eq('user_id', userData.id)
+        .order('created_at', { ascending: false })
+        .limit(20);
+
+      if (error) {
+        return new Response(
+          JSON.stringify({ error: 'Failed to fetch withdrawals' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, data: withdrawals }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }

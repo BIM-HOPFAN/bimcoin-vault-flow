@@ -13,14 +13,34 @@ export interface WithdrawalPreview {
 
 export interface WithdrawalResult {
   success: boolean;
-  bim_withdrawn: number;
-  ton_received?: number;
-  jetton_received?: number;
-  penalty_amount?: number;
-  burn_type: string;
   withdrawal_id?: string;
-  tx_hash?: string;
+  bim_amount?: number;
+  ton_amount?: number;
+  jetton_amount?: number;
+  penalty_amount?: number;
+  total_bim_deducted?: number;
+  status?: string;
+  message?: string;
   error?: string;
+}
+
+export interface WithdrawalRecord {
+  id: string;
+  user_id: string;
+  wallet_address: string;
+  bim_amount: number;
+  withdrawal_type: string;
+  status: string;
+  ton_amount?: number;
+  jetton_amount?: number;
+  penalty_amount: number;
+  total_bim_deducted: number;
+  created_at: string;
+  approved_at?: string;
+  completed_at?: string;
+  rejected_at?: string;
+  tx_hash?: string;
+  rejection_reason?: string;
 }
 
 class WithdrawalAPI {
@@ -87,6 +107,29 @@ class WithdrawalAPI {
       bim_amount: bimAmount,
       withdrawal_type: withdrawalType,
     });
+  }
+
+  async getMyWithdrawals(walletAddress: string): Promise<WithdrawalRecord[]> {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      const response = await fetch(`${WITHDRAWAL_API_URL}/my-withdrawals?wallet_address=${encodeURIComponent(walletAddress)}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${session?.access_token || ''}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch withdrawals');
+      }
+
+      const result = await response.json();
+      return result.data || [];
+    } catch (error) {
+      console.error('Failed to fetch withdrawals:', error);
+      return [];
+    }
   }
 }
 

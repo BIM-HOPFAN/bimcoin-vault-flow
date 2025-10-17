@@ -467,6 +467,84 @@ export type Database = {
           },
         ]
       }
+      withdrawals: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          bim_amount: number
+          completed_at: string | null
+          created_at: string
+          id: string
+          jetton_amount: number | null
+          penalty_amount: number | null
+          rejected_at: string | null
+          rejection_reason: string | null
+          status: Database["public"]["Enums"]["withdrawal_status"]
+          ton_amount: number | null
+          total_bim_deducted: number
+          tx_hash: string | null
+          updated_at: string
+          user_id: string
+          wallet_address: string
+          withdrawal_type: string
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          bim_amount: number
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          jetton_amount?: number | null
+          penalty_amount?: number | null
+          rejected_at?: string | null
+          rejection_reason?: string | null
+          status?: Database["public"]["Enums"]["withdrawal_status"]
+          ton_amount?: number | null
+          total_bim_deducted: number
+          tx_hash?: string | null
+          updated_at?: string
+          user_id: string
+          wallet_address: string
+          withdrawal_type: string
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          bim_amount?: number
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          jetton_amount?: number | null
+          penalty_amount?: number | null
+          rejected_at?: string | null
+          rejection_reason?: string | null
+          status?: Database["public"]["Enums"]["withdrawal_status"]
+          ton_amount?: number | null
+          total_bim_deducted?: number
+          tx_hash?: string | null
+          updated_at?: string
+          user_id?: string
+          wallet_address?: string
+          withdrawal_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "withdrawals_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "withdrawals_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -515,6 +593,7 @@ export type Database = {
       mining_status: "active" | "completed" | "claimed"
       referral_status: "pending" | "completed"
       task_status: "available" | "completed" | "claimed"
+      withdrawal_status: "pending" | "approved" | "completed" | "rejected"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -646,6 +725,7 @@ export const Constants = {
       mining_status: ["active", "completed", "claimed"],
       referral_status: ["pending", "completed"],
       task_status: ["available", "completed", "claimed"],
+      withdrawal_status: ["pending", "approved", "completed", "rejected"],
     },
   },
 } as const

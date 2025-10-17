@@ -62,25 +62,25 @@ export const BIMBurnCard: React.FC<BIMBurnCardProps> = ({
         : await withdrawalAPI.withdrawJetton(address, amount);
       
       if (result.success) {
-        const payoutDescription = payoutType === 'ton' 
-          ? `${result.ton_received || 0} TON` 
-          : `${result.jetton_received || 0} Bimcoin`;
+        const estimateText = payoutType === 'ton'
+          ? `${result.ton_amount || 0} TON`
+          : `${result.jetton_amount || 0} Bimcoin`;
 
         const penaltyNote = result.penalty_amount && result.penalty_amount > 0
-          ? ` (${result.penalty_amount} BIM penalty applied)`
+          ? `\n${result.penalty_amount} BIM penalty will be applied.`
           : '';
         
         toast({
-          title: "Withdrawal successful!",
-          description: `Withdrew ${result.bim_withdrawn} BIM and received ${payoutDescription}${penaltyNote}`,
+          title: "Withdrawal request submitted!",
+          description: `Your request to withdraw ${result.bim_amount} BIM for ${estimateText} is pending admin approval.${penaltyNote}`,
           variant: "default",
         });
         setBurnAmount('');
         onBalanceUpdate?.();
       } else {
         toast({
-          title: "Withdrawal failed",
-          description: result.error || "Failed to process withdrawal",
+          title: "Request failed",
+          description: result.error || "Failed to submit withdrawal request",
           variant: "destructive",
         });
       }
@@ -136,7 +136,7 @@ export const BIMBurnCard: React.FC<BIMBurnCardProps> = ({
           Withdraw BIM
         </CardTitle>
         <CardDescription>
-          Withdraw your BIM tokens to receive TON or Bimcoin jettons automatically
+          Submit withdrawal requests for admin approval. You'll receive TON or Bimcoin jettons once processed.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -236,7 +236,7 @@ export const BIMBurnCard: React.FC<BIMBurnCardProps> = ({
           ) : (
             <>
               <Coins className="w-4 h-4 mr-2" />
-              {payoutType === 'ton' ? 'Withdraw BIM for TON' : 'Withdraw BIM for Bimcoin'}
+              {payoutType === 'ton' ? 'Request TON Withdrawal' : 'Request Bimcoin Withdrawal'}
             </>
           )}
         </Button>
