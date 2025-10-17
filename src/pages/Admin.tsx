@@ -107,8 +107,13 @@ const Admin = () => {
   };
 
   const approveWithdrawal = async (id: string) => {
+    if (!confirm('Approve this withdrawal? The blockchain transaction will be processed automatically.')) {
+      return;
+    }
+
     try {
-      const { error } = await supabase
+      // First update status to approved
+      const { error: updateError } = await supabase
         .from('withdrawals')
         .update({ 
           status: 'approved',
@@ -116,21 +121,38 @@ const Admin = () => {
         })
         .eq('id', id);
 
-      if (error) throw error;
+      if (updateError) throw updateError;
 
       toast({
-        title: "Success",
-        description: "Withdrawal approved. Process the blockchain transaction next.",
+        title: "Processing...",
+        description: "Withdrawal approved. Processing blockchain transaction...",
+      });
+
+      // Trigger automatic payout processing
+      const { data, error: processError } = await supabase.functions.invoke('process-withdrawal', {
+        body: { withdrawal_id: id }
+      });
+
+      if (processError || !data?.success) {
+        throw new Error(data?.error || processError?.message || 'Processing failed');
+      }
+
+      toast({
+        title: "Success!",
+        description: `Withdrawal completed automatically. TX: ${data.tx_hash}`,
       });
       
       fetchWithdrawals();
     } catch (error) {
-      console.error('Failed to approve withdrawal:', error);
+      console.error('Failed to process withdrawal:', error);
       toast({
         title: "Error",
-        description: "Failed to approve withdrawal",
+        description: error instanceof Error ? error.message : "Failed to process withdrawal",
         variant: "destructive",
       });
+      
+      // Refresh to show updated status
+      fetchWithdrawals();
     }
   };
 
@@ -166,35 +188,45 @@ const Admin = () => {
     }
   };
 
-  const completeWithdrawal = async (id: string) => {
-    const txHash = prompt('Enter transaction hash:');
-    if (!txHash) return;
+  const retryWithdrawal = async (id: string) => {
+    if (!confirm('Retry processing this withdrawal?')) {
+      return;
+    }
 
     try {
-      const { error } = await supabase
+      // Reset to approved status
+      await supabase
         .from('withdrawals')
         .update({ 
-          status: 'completed',
-          completed_at: new Date().toISOString(),
-          tx_hash: txHash
+          status: 'approved',
+          rejection_reason: null
         })
         .eq('id', id);
 
-      if (error) throw error;
+      // Trigger processing
+      const { data, error: processError } = await supabase.functions.invoke('process-withdrawal', {
+        body: { withdrawal_id: id }
+      });
+
+      if (processError || !data?.success) {
+        throw new Error(data?.error || processError?.message || 'Processing failed');
+      }
 
       toast({
-        title: "Success",
-        description: "Withdrawal marked as completed",
+        title: "Success!",
+        description: `Withdrawal completed. TX: ${data.tx_hash}`,
       });
       
       fetchWithdrawals();
     } catch (error) {
-      console.error('Failed to complete withdrawal:', error);
+      console.error('Failed to retry withdrawal:', error);
       toast({
         title: "Error",
-        description: "Failed to complete withdrawal",
+        description: error instanceof Error ? error.message : "Failed to retry withdrawal",
         variant: "destructive",
       });
+      
+      fetchWithdrawals();
     }
   };
 
@@ -583,9 +615,10 @@ const Admin = () => {
                                 variant="outline"
                                 className="text-green-400 hover:text-green-300"
                                 onClick={() => approveWithdrawal(withdrawal.id)}
+                                title="Approve and auto-process blockchain transaction"
                               >
                                 <CheckCircle className="w-4 h-4 mr-1" />
-                                Approve
+                                Approve & Process
                               </Button>
                               <Button
                                 size="sm"
@@ -598,15 +631,16 @@ const Admin = () => {
                               </Button>
                             </>
                           )}
-                          {withdrawal.status === 'approved' && (
+                          {withdrawal.status === 'rejected' && withdrawal.rejection_reason?.includes('treasury balance') && (
                             <Button
                               size="sm"
                               variant="outline"
-                              className="text-primary hover:text-primary"
-                              onClick={() => completeWithdrawal(withdrawal.id)}
+                              className="text-blue-400 hover:text-blue-300"
+                              onClick={() => retryWithdrawal(withdrawal.id)}
+                              title="Retry processing after funding treasury"
                             >
                               <CheckCircle className="w-4 h-4 mr-1" />
-                              Mark Complete
+                              Retry
                             </Button>
                           )}
                         </div>
