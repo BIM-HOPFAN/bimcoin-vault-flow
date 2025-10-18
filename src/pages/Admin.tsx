@@ -89,13 +89,17 @@ const Admin = () => {
 
   const fetchWithdrawals = async () => {
     try {
-      const { data, error } = await supabase
-        .from('withdrawals')
-        .select('*, users(wallet_address)')
-        .order('created_at', { ascending: false });
+      const { data, error } = await supabase.functions.invoke('withdrawal-api/all', {
+        method: 'GET'
+      });
 
       if (error) throw error;
-      setWithdrawals(data || []);
+      
+      if (data?.success) {
+        setWithdrawals(data.data || []);
+      } else {
+        throw new Error('Failed to fetch withdrawals');
+      }
     } catch (error) {
       console.error('Failed to fetch withdrawals:', error);
       toast({

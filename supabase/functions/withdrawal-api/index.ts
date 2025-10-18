@@ -229,6 +229,29 @@ serve(async (req) => {
       );
     }
 
+    // Get all withdrawal requests (Admin only)
+    if (path === '/all' && req.method === 'GET') {
+      console.log('Fetching all withdrawal requests');
+      
+      const { data: withdrawals, error } = await supabase
+        .from('withdrawals')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching withdrawals:', error);
+        return new Response(
+          JSON.stringify({ error: 'Failed to fetch withdrawals' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, data: withdrawals }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     // Get user's withdrawal requests
     if (path === '/my-withdrawals' && req.method === 'GET') {
       const url = new URL(req.url);
