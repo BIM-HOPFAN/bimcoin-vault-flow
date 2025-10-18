@@ -5,7 +5,7 @@ import { mnemonicToWalletKey } from 'https://esm.sh/@ton/crypto@3.3.0';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-wallet-address',
 };
 
 // Configuration
@@ -15,21 +15,33 @@ const MIN_TON_WITHDRAWAL = 0.1;
 const MIN_JETTON_WITHDRAWAL = 1;
 const TRANSACTION_FEE = 0.1; // TON needed for transaction fees
 
+/**
+ * Verify if the wallet address is an admin
+ */
+async function verifyAdmin(supabase: any, walletAddress: string): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('admin_users')
+    .select('wallet_address')
+    .eq('wallet_address', walletAddress)
+    .maybeSingle();
+
+  if (error) {
+    console.error('Error verifying admin:', error);
+    return false;
+  }
+
+  return !!data;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    // Get authorization token
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: 'Authorization header required' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
+    // Get wallet address from header
+    const walletAddress = req.headers.get('x-wallet-address');
+    
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -232,6 +244,23 @@ serve(async (req) => {
     // Get all withdrawal requests (Admin only)
     if (path === '/all' && req.method === 'GET') {
       console.log('Fetching all withdrawal requests');
+      
+      // Verify admin access
+      if (!walletAddress) {
+        return new Response(
+          JSON.stringify({ error: 'Wallet address required in x-wallet-address header' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const isAdmin = await verifyAdmin(supabase, walletAddress);
+      if (!isAdmin) {
+        console.log('Unauthorized admin access attempt from:', walletAddress);
+        return new Response(
+          JSON.stringify({ error: 'Unauthorized: Admin access required' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
       
       const { data: withdrawals, error } = await supabase
         .from('withdrawals')

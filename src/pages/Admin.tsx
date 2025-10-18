@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,10 +9,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Edit, Trash2, Save, X, CheckCircle, XCircle, Clock, Coins } from 'lucide-react';
+import { Plus, Edit, Trash2, Save, X, CheckCircle, XCircle, Clock, Coins, ShieldAlert } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { bimCoinAPI } from '@/lib/api';
 import { supabase } from '@/integrations/supabase/client';
+import { useAdminAuth } from '@/hooks/useAdminAuth';
+import WalletConnectButton from '@/components/WalletConnectButton';
 
 interface Task {
   id?: string;
@@ -27,6 +30,8 @@ interface Task {
 }
 
 const Admin = () => {
+  const navigate = useNavigate();
+  const { isAdmin, loading: authLoading, walletAddress } = useAdminAuth();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [withdrawals, setWithdrawals] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -34,6 +39,18 @@ const Admin = () => {
   const [showForm, setShowForm] = useState(false);
   const [activeTab, setActiveTab] = useState('tasks');
   const { toast } = useToast();
+
+  // Redirect if not admin
+  useEffect(() => {
+    if (!authLoading && !isAdmin) {
+      toast({
+        title: "Access Denied",
+        description: "You don't have permission to access the admin panel",
+        variant: "destructive",
+      });
+      navigate('/');
+    }
+  }, [isAdmin, authLoading, navigate, toast]);
 
   const [formData, setFormData] = useState<Task>({
     title: '',
@@ -64,9 +81,11 @@ const Admin = () => {
   ];
 
   useEffect(() => {
-    fetchTasks();
-    fetchWithdrawals();
-  }, []);
+    if (isAdmin) {
+      fetchTasks();
+      fetchWithdrawals();
+    }
+  }, [isAdmin]);
 
   const fetchTasks = async () => {
     setLoading(true);
@@ -90,7 +109,10 @@ const Admin = () => {
   const fetchWithdrawals = async () => {
     try {
       const { data, error } = await supabase.functions.invoke('withdrawal-api/all', {
-        method: 'GET'
+        method: 'GET',
+        headers: {
+          'x-wallet-address': walletAddress || '',
+        }
       });
 
       if (error) throw error;
@@ -134,7 +156,10 @@ const Admin = () => {
 
       // Trigger automatic payout processing
       const { data, error: processError } = await supabase.functions.invoke('process-withdrawal', {
-        body: { withdrawal_id: id }
+        body: { withdrawal_id: id },
+        headers: {
+          'x-wallet-address': walletAddress || '',
+        }
       });
 
       if (processError || !data?.success) {
@@ -209,7 +234,10 @@ const Admin = () => {
 
       // Trigger processing
       const { data, error: processError } = await supabase.functions.invoke('process-withdrawal', {
-        body: { withdrawal_id: id }
+        body: { withdrawal_id: id },
+        headers: {
+          'x-wallet-address': walletAddress || '',
+        }
       });
 
       if (processError || !data?.success) {
@@ -332,6 +360,62 @@ const Admin = () => {
     }
   };
 
+  // Show loading state while checking auth
+  if (authLoading) {
+    return (
+      <div className="container mx-auto p-6 flex items-center justify-center min-h-screen">
+        <Card className="enhanced-card max-w-md">
+          <CardContent className="pt-6 text-center">
+            <Clock className="w-12 h-12 mx-auto mb-4 animate-spin text-primary" />
+            <p className="text-muted-foreground">Verifying admin access...</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Show connect wallet prompt if not connected
+  if (!walletAddress) {
+    return (
+      <div className="container mx-auto p-6 flex items-center justify-center min-h-screen">
+        <Card className="enhanced-card max-w-md">
+          <CardHeader>
+            <ShieldAlert className="w-12 h-12 mx-auto mb-4 text-destructive" />
+            <CardTitle className="text-center">Admin Authentication Required</CardTitle>
+            <CardDescription className="text-center">
+              Please connect your admin wallet to access the admin panel
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="text-center">
+            <WalletConnectButton />
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Show unauthorized message if not admin
+  if (!isAdmin) {
+    return (
+      <div className="container mx-auto p-6 flex items-center justify-center min-h-screen">
+        <Card className="enhanced-card max-w-md">
+          <CardHeader>
+            <ShieldAlert className="w-12 h-12 mx-auto mb-4 text-destructive" />
+            <CardTitle className="text-center">Access Denied</CardTitle>
+            <CardDescription className="text-center">
+              Your wallet address is not authorized to access the admin panel
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="text-center">
+            <Button onClick={() => navigate('/')} variant="outline">
+              Return to Home
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex justify-between items-center">
@@ -339,6 +423,10 @@ const Admin = () => {
           <h1 className="text-3xl font-bold">Administration Panel</h1>
           <p className="text-muted-foreground">Manage tasks and withdrawal requests</p>
         </div>
+        <Badge variant="outline" className="flex items-center gap-2">
+          <ShieldAlert className="w-4 h-4" />
+          Admin: {walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}
+        </Badge>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
